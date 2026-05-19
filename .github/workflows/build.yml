@@ -107,6 +107,11 @@ jobs:
           npm ci
           npm run typecheck
           npm run build
+      - name: Stage scan-engine + signatures into web/dist
+        run: |
+          mkdir -p web/dist/scan-engine web/dist/signatures-pack
+          cp -R scan-wasm/dist/. web/dist/scan-engine/
+          cp -R signatures-pack/dist/. web/dist/signatures-pack/
       - name: Upload site
         uses: actions/upload-artifact@v4
         with:
