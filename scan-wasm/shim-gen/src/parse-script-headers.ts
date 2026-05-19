@@ -18,7 +18,7 @@ const METHOD_RE =
   /^\s*(?<ret>(?:virtual\s+)?(?:const\s+)?[\w:<>,\s]+?[\s&*]+)\s*(?<name>\w+)\s*\((?<args>[^()]*)\)\s*(?:const\s*)?;\s*$/;
 
 function stripLineComments(s: string): string {
-  return s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\
+  return s.replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 
 function parseParams(argsStr: string): CppParam[] {
