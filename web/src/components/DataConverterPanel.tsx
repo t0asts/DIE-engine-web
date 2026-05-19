@@ -55,7 +55,7 @@ function toHexStr(b: Uint8Array): string { let s = ""; for (const x of b) s += h
 function b64(b: Uint8Array, urlSafe = false): string {
   let bin = ""; for (const x of b) bin += String.fromCharCode(x);
   let s = btoa(bin);
-  if (urlSafe) s = s.replace(/\+/g, "-").replace(/\
+  if (urlSafe) s = s.replace(/\+/g, "-").replace(/\//g, "_");
   return s;
 }
 function crc32(b: Uint8Array): number {
