@@ -1,0 +1,16 @@
+{
+  "name": "die-web-shim-gen",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Header parser and JS shim generator for DIE script bindings",
+  "type": "module",
+  "scripts": {
+    "build": "tsx src/index.ts",
+    "build:check": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.16.0",
+    "typescript": "^5.5.0"
+  }
+}

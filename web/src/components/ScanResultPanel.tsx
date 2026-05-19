@@ -1,0 +1,172 @@
+import { useState } from "react";
+
+import { useWorkspace } from "../store/workspace";
+
+import { FileInfoPanel } from "./FileInfoPanel";
+import { HashPanel } from "./HashPanel";
+import { EntropyGraph } from "./EntropyGraph";
+import { DebugPanel } from "./DebugPanel";
+import { Tabs, type TabDef } from "./Tabs";
+import { StringsPanel } from "./StringsPanel";
+import { SectionsPanel } from "./SectionsPanel";
+import { StructPanel } from "./StructPanel";
+import { DisasmView } from "./DisasmView";
+import { SymbolsPanel } from "./SymbolsPanel";
+import { PeidPanel } from "./PeidPanel";
+import { YaraPanel } from "./YaraPanel";
+import { ArchivePanel } from "./ArchivePanel";
+import { ExtractorPanel } from "./ExtractorPanel";
+import { VisualizationPanel } from "./VisualizationPanel";
+import { HexView } from "./HexView";
+import { DataConverterPanel } from "./DataConverterPanel";
+import { DemanglerPanel } from "./DemanglerPanel";
+import { ExportButton } from "./ExportButton";
+
+export function ScanResultPanel({ fileId }: { fileId: string }) {
+  const file = useWorkspace((s) => s.files.find((f) => f.id === fileId));
+  const entry = useWorkspace((s) => s.scans.get(fileId));
+  const [activeTab, setActiveTab] = useState("detection");
+
+  if (!file) return null;
+
+  if (!entry || entry.status === "loading") {
+    return (
+      <div className="p-8 text-zinc-500">
+        Scanning <span className="font-mono">{file.name}</span>…
+      </div>
+    );
+  }
+
+  if (entry.status === "error") {
+    return (
+      <div className="p-8 text-red-400">
+        <div className="font-medium">Scan failed</div>
+        <div className="font-mono text-xs mt-2">{entry.error}</div>
+      </div>
+    );
+  }
+
+  const r = entry.result!;
+  const sectionCount = r.memoryMap?.records.length ?? 0;
+  const stringCount = r.strings.length;
+  const structCount = r.structure?.length ?? 0;
+  const symbolCount = r.symbols?.length ?? 0;
+  const entryPoint = r.memoryMap?.entryPoint ?? 0;
+  
+  const canDisasm = r.disasmAvailable;
+  const isPE = r.debugLog?.jsClass === "PE";
+  const extractedCount = r.extracted?.length ?? 0;
+
+  const tabs: TabDef[] = [
+    { id: "detection", label: "Detection", badge: r.records.length || undefined },
+    { id: "sections",  label: "Sections",  badge: sectionCount || undefined },
+    ...(structCount ? [{ id: "structure", label: "Structure" } as TabDef] : []),
+    ...(symbolCount ? [{ id: "symbols", label: "Symbols", badge: symbolCount } as TabDef] : []),
+    ...(canDisasm ? [{ id: "disasm", label: "Disasm" } as TabDef] : []),
+    ...(isPE ? [{ id: "peid", label: "PEiD" } as TabDef] : []),
+    { id: "yara",      label: "YARA" },
+    ...(r.archive
+      ? [{ id: "archive", label: "Archive", badge: r.archive.totalEntries || undefined } as TabDef]
+      : []),
+    ...(extractedCount ? [{ id: "extractor", label: "Extractor", badge: extractedCount } as TabDef] : []),
+    { id: "strings",   label: "Strings",   badge: stringCount || undefined },
+    { id: "hex",       label: "Hex" },
+    { id: "visualize", label: "Visualize" },
+    { id: "convert",   label: "Convert" },
+    { id: "demangle",  label: "Demangler" },
+    { id: "debug",     label: "Debug" },
+  ];
+  
+  const tab = tabs.some((t) => t.id === activeTab) ? activeTab : "detection";
+
+  return (
+    <div className="flex flex-col h-full min-h-0">
+      <Tabs
+        tabs={tabs}
+        activeId={tab}
+        onChange={setActiveTab}
+        trailing={
+          <span className="font-mono">
+            {file.name} <span className="text-zinc-600">·</span> {file.size.toLocaleString()} B
+          </span>
+        }
+      />
+      <div className="flex-1 overflow-auto min-h-0">
+        {tab === "detection" ? <DetectionTab fileName={file.name} result={r} /> : null}
+        {tab === "sections"  ? <SectionsPanel memoryMap={r.memoryMap} /> : null}
+        {tab === "structure" ? <StructPanel structure={r.structure ?? []} /> : null}
+        {tab === "symbols"   ? <SymbolsPanel symbols={r.symbols ?? []} /> : null}
+        {tab === "disasm"    ? <DisasmView bytes={file.bytes} entryPoint={entryPoint} arch={r.memoryMap?.arch ?? ""} /> : null}
+        {tab === "peid"      ? <PeidPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
+        {tab === "yara"      ? <YaraPanel bytes={file.bytes} /> : null}
+        {tab === "archive" && r.archive ? <ArchivePanel archive={r.archive} bytes={file.bytes} parentName={file.name} /> : null}
+        {tab === "extractor" ? <ExtractorPanel records={r.extracted ?? []} bytes={file.bytes} parentName={file.name} /> : null}
+        {tab === "strings"   ? <StringsPanel strings={r.strings} /> : null}
+        {tab === "hex"       ? <HexView bytes={new Uint8Array(file.bytes)} /> : null}
+        {tab === "visualize" ? <VisualizationPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
+        {tab === "convert"   ? <DataConverterPanel /> : null}
+        {tab === "demangle"  ? <DemanglerPanel /> : null}
+        {tab === "debug"     ? <DebugPanel fileName={file.name} result={r} /> : null}
+      </div>
+    </div>
+  );
+}
+
+function DetectionTab({ fileName, result }: { fileName: string; result: import("../worker/protocol").ScanResult }) {
+  const r = result;
+  return (
+    <div>
+      <section className="p-4">
+        <div className="flex items-start justify-between gap-3">
+          <h1 className="text-lg font-semibold truncate">{fileName}</h1>
+          <ExportButton fileName={fileName} result={r} />
+        </div>
+        <RecordsList records={r.records} />
+        {r.errors.length ? (
+          <details className="mt-4 text-xs text-zinc-500">
+            <summary>Engine warnings ({r.errors.length})</summary>
+            <ul className="mt-2 space-y-0.5 font-mono">
+              {r.errors.map((e, i) => <li key={i}>{e}</li>)}
+            </ul>
+          </details>
+        ) : null}
+      </section>
+
+      <FileInfoPanel result={r} />
+      <HashPanel hashes={r.hashes} />
+      <EntropyGraph points={r.entropy} />
+    </div>
+  );
+}
+
+function RecordsList({ records }: { records: { type: string; name: string; version?: string; options?: string; language?: string }[] }) {
+  if (records.length === 0) {
+    return (
+      <div className="mt-3 text-sm text-zinc-500">
+        No detections. The format was identified but no signatures matched.
+      </div>
+    );
+  }
+  const groups = new Map<string, typeof records>();
+  for (const r of records) {
+    if (!groups.has(r.type)) groups.set(r.type, []);
+    groups.get(r.type)!.push(r);
+  }
+  return (
+    <ul className="mt-3 space-y-1 text-sm">
+      {[...groups.entries()].map(([type, rs]) => (
+        <li key={type}>
+          <span className="text-zinc-500 mr-2">{type}:</span>
+          {rs.map((r, i) => (
+            <span key={i} className="mr-3">
+              <span className="font-medium">{r.name}</span>
+              {r.version ? <span className="text-zinc-400"> {r.version}</span> : null}
+              {r.options ? <span className="text-zinc-500"> [{r.options}]</span> : null}
+              {r.language ? <span className="text-zinc-500"> ({r.language})</span> : null}
+            </span>
+          ))}
+        </li>
+      ))}
+    </ul>
+  );
+}

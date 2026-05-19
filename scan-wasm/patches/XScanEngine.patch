@@ -1,0 +1,39 @@
+diff --git a/modules/binary_script.h b/modules/binary_script.h
+index 3b80b65..9fa7820 100755
+--- a/modules/binary_script.h
++++ b/modules/binary_script.h
+@@ -39,6 +39,7 @@ public:
+         bool bIsArchivesScan;
+         bool bIsVerbose;
+         bool bIsProfiling;
++        bool bIsFirstWrapperScan;  // Added by DIE-Web: SpecAbstract's nfd_binary.cpp expects this field; upstream skew between SpecAbstract and XScanEngine submodules.
+         QString sScanID;
+     };
+ 
+diff --git a/xscanengine.h b/xscanengine.h
+index 762bb9b..56e2116 100644
+--- a/xscanengine.h
++++ b/xscanengine.h
+@@ -1082,6 +1082,7 @@ public:
+         bool bIsArchivesScan;
+         bool bIsOverlayScan;
+         bool bIsAggressiveScan;
++        bool bIsFirstWrapperScan;  // Added by DIE-Web: SpecAbstract expects this; upstream skew.
+         bool bIsAllTypesScan;
+         bool bUseCache;
+         bool bShowInternalDetects;
+@@ -1126,10 +1127,10 @@ public:
+         bool bCollectionAllTypes;
+         QSet<RECORD_TYPE> stCollectionTypes;
+         QString sCollectionResultDirectory;
+-        bool bCollectionCopyFiles;
+-        bool bCollectionCopyRemove;
+-        bool bCollectionCopyMoveToFirst;
+-        bool bCollectionCreateCatalog;
++        bool bCollectionCopyFiles;
++        bool bCollectionCopyRemove;
++        bool bCollectionCopyMoveToFirst;
++        bool bCollectionCreateCatalog;
+         bool bCollectionLog;
+         QString sCollectionCopyFormat;
+         QString sCollectionCatalogFormat;

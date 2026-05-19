@@ -1,0 +1,375 @@
+diff --git a/modules/nfd_amiga.cpp b/modules/nfd_amiga.cpp
+index 03f13ed..a5f6f68 100644
+--- a/modules/nfd_amiga.cpp
++++ b/modules/nfd_amiga.cpp
+@@ -21,7 +21,7 @@
+ #include "nfd_amiga.h"
+ 
+ NFD_Amiga::NFD_Amiga(XAmigaHunk *pAmiga, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : Amiga_Script(pAmiga, filePart, scanOptions, pPdStruct)
++    : Amiga_Script(pAmiga, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_archive.cpp b/modules/nfd_archive.cpp
+index f736838..89e6b06 100644
+--- a/modules/nfd_archive.cpp
++++ b/modules/nfd_archive.cpp
+@@ -21,6 +21,6 @@
+ #include "nfd_archive.h"
+ 
+ NFD_Archive::NFD_Archive(XArchive *pArchive, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : Archive_Script(pArchive, filePart, scanOptions, pPdStruct)
++    : Archive_Script(pArchive, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_atarist.cpp b/modules/nfd_atarist.cpp
+index 74dd2e6..c3e13b4 100644
+--- a/modules/nfd_atarist.cpp
++++ b/modules/nfd_atarist.cpp
+@@ -21,7 +21,7 @@
+ #include "nfd_atarist.h"
+ 
+ NFD_AtariST::NFD_AtariST(XAtariST *pAtariST, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : AtariST_Script(pAtariST, filePart, scanOptions, pPdStruct)
++    : AtariST_Script(pAtariST, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_binary.cpp b/modules/nfd_binary.cpp
+index a954000..ec3deee 100755
+--- a/modules/nfd_binary.cpp
++++ b/modules/nfd_binary.cpp
+@@ -26,7 +26,10 @@
+ #include "nfd_text.h"
+ 
+ NFD_Binary::NFD_Binary(XBinary *pBinary, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : Binary_Script(pBinary, filePart, scanOptions, pPdStruct)
++    // DIE-Web patch: upstream skew. Binary_Script's constructor takes OPTIONS*,
++    // but SpecAbstract's nfd_binary takes const OPTIONS&. const_cast bridges
++    // the mismatch; Binary_Script doesn't mutate the options struct.
++    : Binary_Script(pBinary, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+@@ -2573,7 +2576,10 @@ void NFD_Binary::handle_Archives(QIODevice *pDevice, XScanEngine::SCAN_OPTIONS *
+         // TODO files
+         pBinaryInfo->basic_info.mapResultArchives.insert(ss.name, NFD_Binary::scansToScan(&(pBinaryInfo->basic_info), &ss));
+     }
+-    // CAB
++    // CAB - DIE-Web: XCab class is not available in this submodule snapshot.
++    //       Skip CAB parsing for now; format detection still works because the
++    //       magic-byte hit recorded earlier is preserved in mapHeaderDetects.
++#if 0
+     else if ((pBinaryInfo->basic_info.mapHeaderDetects.contains(XScanEngine::RECORD_NAME_CAB)) && (pBinaryInfo->basic_info.id.nSize >= 30)) {
+         XCab xcab(pDevice);
+ 
+@@ -2589,6 +2595,7 @@ void NFD_Binary::handle_Archives(QIODevice *pDevice, XScanEngine::SCAN_OPTIONS *
+             pBinaryInfo->basic_info.mapResultArchives.insert(ss.name, NFD_Binary::scansToScan(&(pBinaryInfo->basic_info), &ss));
+         }
+     }
++#endif
+     // MAch-O FAT
+     else if ((pBinaryInfo->basic_info.mapHeaderDetects.contains(XScanEngine::RECORD_NAME_MACHOFAT)) && (pBinaryInfo->basic_info.id.nSize >= 30)) {
+         XMACHOFat xmachofat(pDevice);
+diff --git a/modules/nfd_cfbf.cpp b/modules/nfd_cfbf.cpp
+index f67b8d7..5d0fa13 100644
+--- a/modules/nfd_cfbf.cpp
++++ b/modules/nfd_cfbf.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_cfbf.h"
+ 
+-NFD_CFBF::NFD_CFBF(XCFBF *pCFBF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : CFBF_Script(pCFBF, filePart, scanOptions, pPdStruct)
++NFD_CFBF::NFD_CFBF(XCFBF *pCFBF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : CFBF_Script(pCFBF, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_com.cpp b/modules/nfd_com.cpp
+index 5d6c0cf..954d3c3 100644
+--- a/modules/nfd_com.cpp
++++ b/modules/nfd_com.cpp
+@@ -23,7 +23,7 @@
+ #include "xcom.h"
+ #include "xscanengine.h"
+ 
+-NFD_COM::NFD_COM(XCOM *pCOM, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : COM_Script(pCOM, filePart, scanOptions, pPdStruct)
++NFD_COM::NFD_COM(XCOM *pCOM, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : COM_Script(pCOM, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_dex.cpp b/modules/nfd_dex.cpp
+index 2d561da..cb66ef1 100644
+--- a/modules/nfd_dex.cpp
++++ b/modules/nfd_dex.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_dex.h"
+ 
+-NFD_DEX::NFD_DEX(XDEX *pDex, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : DEX_Script(pDex, filePart, scanOptions, pPdStruct)
++NFD_DEX::NFD_DEX(XDEX *pDex, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : DEX_Script(pDex, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ // Keep includes minimal; actual signature tables are defined below in this TU
+diff --git a/modules/nfd_dos16m.cpp b/modules/nfd_dos16m.cpp
+index db1b409..69f11a2 100644
+--- a/modules/nfd_dos16m.cpp
++++ b/modules/nfd_dos16m.cpp
+@@ -21,6 +21,6 @@
+ #include "nfd_dos16m.h"
+ 
+ NFD_DOS16M::NFD_DOS16M(XDOS16 *pXdos16, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : DOS16M_Script(pXdos16, filePart, scanOptions, pPdStruct)
++    : DOS16M_Script(pXdos16, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_dos4g.cpp b/modules/nfd_dos4g.cpp
+index 1246044..dd07bd5 100644
+--- a/modules/nfd_dos4g.cpp
++++ b/modules/nfd_dos4g.cpp
+@@ -20,6 +20,6 @@
+  */
+ #include "nfd_dos4g.h"
+ 
+-NFD_DOS4G::NFD_DOS4G(XDOS16 *pXdos16, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : DOS4G_Script(pXdos16, filePart, scanOptions, pPdStruct)
++NFD_DOS4G::NFD_DOS4G(XDOS16 *pXdos16, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : DOS4G_Script(pXdos16, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_elf.cpp b/modules/nfd_elf.cpp
+index 31bd175..a94343a 100644
+--- a/modules/nfd_elf.cpp
++++ b/modules/nfd_elf.cpp
+@@ -24,7 +24,7 @@
+ using _SCANS_STRUCT = NFD_Binary::SCANS_STRUCT;
+ using VI_STRUCT = NFD_Binary::VI_STRUCT;
+ 
+-NFD_ELF::NFD_ELF(XELF *pELF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : ELF_Script(pELF, filePart, scanOptions, pPdStruct)
++NFD_ELF::NFD_ELF(XELF *pELF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : ELF_Script(pELF, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_image.cpp b/modules/nfd_image.cpp
+index e4fc092..68ef002 100644
+--- a/modules/nfd_image.cpp
++++ b/modules/nfd_image.cpp
+@@ -20,6 +20,6 @@
+  */
+ #include "nfd_image.h"
+ 
+-NFD_IMAGE::NFD_IMAGE(XBinary *pImage, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : Image_Script(pImage, filePart, scanOptions, pPdStruct)
++NFD_IMAGE::NFD_IMAGE(XBinary *pImage, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : Image_Script(pImage, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_ipa.cpp b/modules/nfd_ipa.cpp
+index 5d1d8bf..74a9dd7 100644
+--- a/modules/nfd_ipa.cpp
++++ b/modules/nfd_ipa.cpp
+@@ -20,6 +20,6 @@
+  */
+ #include "nfd_ipa.h"
+ 
+-NFD_IPA::NFD_IPA(XIPA *pIPA, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : IPA_Script(pIPA, filePart, scanOptions, pPdStruct)
++NFD_IPA::NFD_IPA(XIPA *pIPA, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : IPA_Script(pIPA, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_jar.cpp b/modules/nfd_jar.cpp
+index 15c5005..b52fd99 100644
+--- a/modules/nfd_jar.cpp
++++ b/modules/nfd_jar.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_jar.h"
+ 
+-NFD_JAR::NFD_JAR(XZip *pZip, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : JAR_Script(pZip, filePart, scanOptions, pPdStruct)
++NFD_JAR::NFD_JAR(XZip *pZip, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : JAR_Script(pZip, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+@@ -57,7 +57,7 @@ NFD_JAR::JARINFO_STRUCT NFD_JAR::getInfo(QIODevice *pDevice, XScanEngine::SCANID
+         // Inline minimal subset of Zip_handle_Metainfos for JAR context
+         {
+             Binary_Script::OPTIONS binOpts = NFD_Binary::toOptions(pOptions);
+-            JAR_Script js(&jar, parentId.filePart, binOpts, pPdStruct);
++            JAR_Script js(&jar, parentId.filePart, &binOpts, pPdStruct);
+             QString sCreatedBy = js.getManifestRecord("Created-By");
+             QString sBuiltBy = js.getManifestRecord("Built-By");
+             QString sAntVersion = js.getManifestRecord("Ant-Version");
+diff --git a/modules/nfd_javaclass.cpp b/modules/nfd_javaclass.cpp
+index 705742c..f9d6e1f 100644
+--- a/modules/nfd_javaclass.cpp
++++ b/modules/nfd_javaclass.cpp
+@@ -21,7 +21,7 @@
+ #include "nfd_javaclass.h"
+ 
+ NFD_JavaClass::NFD_JavaClass(XJavaClass *pJavaClass, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : JavaClass_Script(pJavaClass, filePart, scanOptions, pPdStruct)
++    : JavaClass_Script(pJavaClass, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_jpeg.cpp b/modules/nfd_jpeg.cpp
+index 5b1c196..887bf48 100644
+--- a/modules/nfd_jpeg.cpp
++++ b/modules/nfd_jpeg.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_jpeg.h"
+ 
+-NFD_JPEG::NFD_JPEG(XJpeg *pJpeg, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : Jpeg_Script(pJpeg, filePart, scanOptions, pPdStruct)
++NFD_JPEG::NFD_JPEG(XJpeg *pJpeg, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : Jpeg_Script(pJpeg, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_le.cpp b/modules/nfd_le.cpp
+index 937a3be..c859f80 100644
+--- a/modules/nfd_le.cpp
++++ b/modules/nfd_le.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_le.h"
+ 
+-NFD_LE::NFD_LE(XLE *pLE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : LE_Script(pLE, filePart, scanOptions, pPdStruct)
++NFD_LE::NFD_LE(XLE *pLE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : LE_Script(pLE, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_lx.cpp b/modules/nfd_lx.cpp
+index b341f14..5fe3c4c 100644
+--- a/modules/nfd_lx.cpp
++++ b/modules/nfd_lx.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_lx.h"
+ 
+-NFD_LX::NFD_LX(XLE *pLX, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : LX_Script(pLX, filePart, scanOptions, pPdStruct)
++NFD_LX::NFD_LX(XLE *pLX, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : LX_Script(pLX, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_mach.cpp b/modules/nfd_mach.cpp
+index 6a03ab3..5792b0b 100644
+--- a/modules/nfd_mach.cpp
++++ b/modules/nfd_mach.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_mach.h"
+ 
+-NFD_MACH::NFD_MACH(XMACH *pMACH, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : MACH_Script(pMACH, filePart, scanOptions, pPdStruct)
++NFD_MACH::NFD_MACH(XMACH *pMACH, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : MACH_Script(pMACH, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_machofat.cpp b/modules/nfd_machofat.cpp
+index 1d07678..8791113 100644
+--- a/modules/nfd_machofat.cpp
++++ b/modules/nfd_machofat.cpp
+@@ -21,6 +21,6 @@
+ #include "nfd_machofat.h"
+ 
+ NFD_MACHOFAT::NFD_MACHOFAT(XMACHOFat *pMachofat, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct)
+-    : MACHOFAT_Script(pMachofat, filePart, scanOptions, pPdStruct)
++    : MACHOFAT_Script(pMachofat, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_msdos.cpp b/modules/nfd_msdos.cpp
+index 04d9817..faa60b1 100644
+--- a/modules/nfd_msdos.cpp
++++ b/modules/nfd_msdos.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_msdos.h"
+ 
+-NFD_MSDOS::NFD_MSDOS(XMSDOS *pMSDOS, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : MSDOS_Script(pMSDOS, filePart, scanOptions, pPdStruct)
++NFD_MSDOS::NFD_MSDOS(XMSDOS *pMSDOS, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : MSDOS_Script(pMSDOS, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_ne.cpp b/modules/nfd_ne.cpp
+index c8e3209..8d89960 100644
+--- a/modules/nfd_ne.cpp
++++ b/modules/nfd_ne.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_ne.h"
+ 
+-NFD_NE::NFD_NE(XNE *pNE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : NE_Script(pNE, filePart, scanOptions, pPdStruct)
++NFD_NE::NFD_NE(XNE *pNE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : NE_Script(pNE, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_npm.cpp b/modules/nfd_npm.cpp
+index e571a92..def94bb 100644
+--- a/modules/nfd_npm.cpp
++++ b/modules/nfd_npm.cpp
+@@ -20,6 +20,6 @@
+  */
+ #include "nfd_npm.h"
+ 
+-NFD_NPM::NFD_NPM(XNPM *pNpm, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : NPM_Script(pNpm, filePart, scanOptions, pPdStruct)
++NFD_NPM::NFD_NPM(XNPM *pNpm, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : NPM_Script(pNpm, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_pdf.cpp b/modules/nfd_pdf.cpp
+index 08d5295..3281a3b 100644
+--- a/modules/nfd_pdf.cpp
++++ b/modules/nfd_pdf.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_pdf.h"
+ 
+-NFD_PDF::NFD_PDF(XPDF *pPDF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PDF_Script(pPDF, filePart, scanOptions, pPdStruct)
++NFD_PDF::NFD_PDF(XPDF *pPDF, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PDF_Script(pPDF, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_pe.cpp b/modules/nfd_pe.cpp
+index 524100e..85ec570 100755
+--- a/modules/nfd_pe.cpp
++++ b/modules/nfd_pe.cpp
+@@ -1154,7 +1154,7 @@ NFD_Binary::SIGNATURE_RECORD _PE_dot_codesection_records[] = {
+ };
+ const qint32 _PE_dot_codesection_records_size = sizeof(_PE_dot_codesection_records);
+ 
+-NFD_PE::NFD_PE(XPE *pPE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PE_Script(pPE, filePart, scanOptions, pPdStruct)
++NFD_PE::NFD_PE(XPE *pPE, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PE_Script(pPE, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_png.cpp b/modules/nfd_png.cpp
+index 54d8f7e..03e50cd 100644
+--- a/modules/nfd_png.cpp
++++ b/modules/nfd_png.cpp
+@@ -20,6 +20,6 @@
+  */
+ #include "nfd_png.h"
+ 
+-NFD_PNG::NFD_PNG(XPNG *pPNG, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PNG_Script(pPNG, filePart, scanOptions, pPdStruct)
++NFD_PNG::NFD_PNG(XPNG *pPNG, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : PNG_Script(pPNG, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+diff --git a/modules/nfd_rar.cpp b/modules/nfd_rar.cpp
+index 89a4317..893905e 100644
+--- a/modules/nfd_rar.cpp
++++ b/modules/nfd_rar.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_rar.h"
+ 
+-NFD_RAR::NFD_RAR(XRar *pRar, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : RAR_Script(pRar, filePart, scanOptions, pPdStruct)
++NFD_RAR::NFD_RAR(XRar *pRar, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : RAR_Script(pRar, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 
+diff --git a/modules/nfd_zip.cpp b/modules/nfd_zip.cpp
+index aa8ff52..0722074 100644
+--- a/modules/nfd_zip.cpp
++++ b/modules/nfd_zip.cpp
+@@ -20,7 +20,7 @@
+  */
+ #include "nfd_zip.h"
+ 
+-NFD_ZIP::NFD_ZIP(XZip *pZip, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : ZIP_Script(pZip, filePart, scanOptions, pPdStruct)
++NFD_ZIP::NFD_ZIP(XZip *pZip, XBinary::FILEPART filePart, const OPTIONS &scanOptions, XBinary::PDSTRUCT *pPdStruct) : ZIP_Script(pZip, filePart, const_cast<Binary_Script::OPTIONS *>(&scanOptions), pPdStruct)
+ {
+ }
+ 

@@ -1,0 +1,9 @@
+FROM nginx:1.27-alpine
+
+COPY web/dist                  /usr/share/nginx/html/
+COPY scan-wasm/dist            /usr/share/nginx/html/scan-engine/
+COPY signatures-pack/dist      /usr/share/nginx/html/signatures-pack/
+
+COPY docker/nginx.conf         /etc/nginx/conf.d/default.conf
+
+EXPOSE 80

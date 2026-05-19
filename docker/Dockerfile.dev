@@ -1,0 +1,64 @@
+FROM ubuntu:24.04
+
+ARG DEBIAN_FRONTEND=noninteractive
+ARG EMSDK_VERSION=3.1.65
+ARG NODE_MAJOR=22
+ARG QT_VERSION=6.7.2
+ARG QT_HOST_PREFIX=/opt/qt-host
+ARG QT_WASM_PREFIX=/opt/qt-wasm
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates curl git build-essential cmake ninja-build pkg-config \
+        python3 python3-pip xz-utils \
+        libglib2.0-dev libfontconfig1-dev libfreetype-dev libxkbcommon-dev \
+        perl \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN curl -fsSL "https://deb.nodesource.com/setup_${NODE_MAJOR}.x" | bash - \
+    && apt-get install -y --no-install-recommends nodejs
+
+RUN git clone --depth 1 --branch ${EMSDK_VERSION} \
+        https://github.com/emscripten-core/emsdk.git /opt/emsdk \
+    && cd /opt/emsdk \
+    && ./emsdk install ${EMSDK_VERSION} \
+    && ./emsdk activate ${EMSDK_VERSION}
+
+ENV PATH="/opt/emsdk:/opt/emsdk/upstream/emscripten:/opt/emsdk/upstream/bin:${PATH}"
+ENV EMSDK="/opt/emsdk"
+
+RUN curl -fsSL https://download.qt.io/archive/qt/${QT_VERSION%.*}/${QT_VERSION}/single/qt-everywhere-src-${QT_VERSION}.tar.xz \
+        -o /tmp/qt.tar.xz \
+    && mkdir -p /tmp/qt-src && tar -xJf /tmp/qt.tar.xz -C /tmp/qt-src --strip-components=1 \
+    && rm /tmp/qt.tar.xz
+
+RUN mkdir /tmp/qt-host-build && cd /tmp/qt-host-build \
+    && /tmp/qt-src/configure -prefix ${QT_HOST_PREFIX} -release \
+        -submodules qtbase \
+        -no-gui -no-widgets -nomake examples -nomake tests \
+        -no-feature-dbus -no-feature-sql \
+        -- -DBUILD_SHARED_LIBS=ON \
+    && cmake --build . --parallel \
+    && cmake --install . \
+    && rm -rf /tmp/qt-host-build
+
+RUN . /opt/emsdk/emsdk_env.sh \
+    && mkdir /tmp/qt-wasm-build && cd /tmp/qt-wasm-build \
+    && /tmp/qt-src/configure -prefix ${QT_WASM_PREFIX} -release \
+        -platform wasm-emscripten \
+        -qt-host-path ${QT_HOST_PREFIX} \
+        -submodules qtbase \
+        -no-gui -no-widgets -nomake examples -nomake tests \
+        -no-feature-dbus -no-feature-sql -no-feature-network \
+        -- -DBUILD_SHARED_LIBS=OFF \
+    && cmake --build . --parallel \
+    && cmake --install . \
+    && rm -rf /tmp/qt-wasm-build /tmp/qt-src
+
+ENV Qt6_DIR="${QT_WASM_PREFIX}/lib/cmake/Qt6"
+ENV CMAKE_PREFIX_PATH="${QT_WASM_PREFIX}"
+
+RUN echo '. /opt/emsdk/emsdk_env.sh > /dev/null 2>&1' >> /etc/bash.bashrc
+
+WORKDIR /work
+EXPOSE 5173
+CMD ["bash"]

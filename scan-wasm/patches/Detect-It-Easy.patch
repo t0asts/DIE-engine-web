@@ -1,0 +1,17 @@
+diff --git a/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg b/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
+index 70378be..94c6bfd 100755
+--- a/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
++++ b/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
+@@ -73,8 +73,11 @@
+ 
+ "use strict";
+ 
++// die-web patch: PE_Cached was declared `const` upstream but unloadCache()
++// reassigns it (PE_Cached = undefined), which is a TypeError under both strict
++// and sloppy mode. Declare it mutable.
++var PE_Cached = {}; // PE-related cache-map
+ const
+-    PE_Cached = {}, // PE-related cache-map
+     logType = {
+         warning: -2, // Service warnings
+         about: -1,   // Information about a module
