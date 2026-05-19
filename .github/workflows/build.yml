@@ -1,0 +1,154 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scan-wasm/**"
+      - "signatures-pack/**"
+      - "web/**"
+      - "docker/**"
+      - ".github/workflows/build.yml"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  shim-gen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Generate JS shims + C++ dispatch
+        run: |
+          cd scan-wasm/shim-gen
+          npm ci
+          npm run build:check
+          npm run build
+      - name: Upload bindings manifest
+        uses: actions/upload-artifact@v4
+        with:
+          name: bindings-manifest
+          path: |
+            scan-wasm/dist/bindings-manifest.json
+            web/src/wasm-bindings/_generated.ts
+            scan-wasm/src/bridge_dispatch.cpp
+
+  signatures-pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Stage signatures
+        run: ./signatures-pack/stage-db.sh
+      - name: Upload pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: signatures-pack
+          path: signatures-pack/dist/
+
+  wasm:
+    runs-on: ubuntu-latest
+    needs: [shim-gen]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Build wasm scan core
+        run: |
+          docker build -t die-web-dev -f docker/Dockerfile.dev .
+          docker run --rm -v "$PWD:/work" -w /work die-web-dev \
+            bash -c '. /opt/emsdk/emsdk_env.sh && ./scan-wasm/build.sh'
+      - name: Bundle-size budget (≤ 8 MB uncompressed)
+        run: |
+          size=$(stat -c %s scan-wasm/dist/scan_engine.wasm)
+          echo "scan_engine.wasm = $size bytes"
+          if [ "$size" -gt 8388608 ]; then
+            echo "::error ::wasm exceeds 8 MB budget"
+            exit 1
+          fi
+      - name: Upload wasm
+        uses: actions/upload-artifact@v4
+        with:
+          name: scan-wasm
+          path: scan-wasm/dist/
+
+  ui:
+    runs-on: ubuntu-latest
+    needs: [shim-gen, signatures-pack, wasm]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: actions/download-artifact@v4
+        with:
+          name: bindings-manifest
+          path: .
+      - uses: actions/download-artifact@v4
+        with:
+          name: scan-wasm
+          path: scan-wasm/dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: signatures-pack
+          path: signatures-pack/dist/
+      - name: Build UI
+        run: |
+          cd web
+          npm ci
+          npm run typecheck
+          npm run build
+      - name: Upload site
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+
+  runtime-image:
+    runs-on: ubuntu-latest
+    needs: [ui]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: web-dist,         path: web/dist/ }
+      - uses: actions/download-artifact@v4
+        with: { name: scan-wasm,        path: scan-wasm/dist/ }
+      - uses: actions/download-artifact@v4
+        with: { name: signatures-pack,  path: signatures-pack/dist/ }
+      - name: Build runtime image
+        run: |
+          docker build -t die-web-runtime:${{ github.sha }} \
+            -f docker/Dockerfile.runtime .
+          docker images die-web-runtime
+
+  pages:
+    runs-on: ubuntu-latest
+    needs: [ui]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: site
+      - run: echo "die.t0asts.com" > site/CNAME
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - id: deploy
+        uses: actions/deploy-pages@v4
