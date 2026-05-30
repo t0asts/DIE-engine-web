@@ -20,7 +20,6 @@ export function HashPanel({ hashes }: { hashes: Hashes }) {
              href={`https://www.virustotal.com/gui/file/${sha}`}>VirusTotal</a>
           <a className="text-sky-400 hover:underline" target="_blank" rel="noreferrer"
              href={`https://bazaar.abuse.ch/sample/${sha}/`}>MalwareBazaar</a>
-          <span className="text-zinc-600">(opens an external site - the hash leaves your browser)</span>
         </div>
       ) : null}
     </section>

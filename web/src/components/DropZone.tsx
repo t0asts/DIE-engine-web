@@ -59,7 +59,7 @@ export function DropZone({ compact = false }: { compact?: boolean }) {
     >
       <div className="text-lg font-medium">Drop a binary here</div>
       <div className="text-sm text-zinc-400 mt-2">
-        PE, ELF, Mach-O, .apk, .pdf, archives - analysis runs entirely in your browser.
+        PE, ELF, Mach-O, .apk, .pdf, archives
       </div>
       <input
         type="file"

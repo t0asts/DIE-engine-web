@@ -214,7 +214,6 @@ function HashSection({ bytes }: { bytes: Uint8Array | null }) {
           <Row label="CRC32">{(crc >>> 0).toString(16).padStart(8, "0")} <span className="text-zinc-600">({crc >>> 0})</span></Row>
           <Row label="SHA-1">{sha?.sha1 ?? "…"}</Row>
           <Row label="SHA-256">{sha?.sha256 ?? "…"}</Row>
-          <div className="text-[11px] text-zinc-600 mt-1">MD5 isn't in the browser crypto API - the file scan's Hash panel computes it via the wasm engine.</div>
         </>
       )}
     </Section>

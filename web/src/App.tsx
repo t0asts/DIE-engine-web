@@ -55,10 +55,22 @@ export function App() {
   const files = useWorkspace((s) => s.files);
   const activeId = useWorkspace((s) => s.activeId);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSidebar, setShowSidebar] = useState(true);
 
   return (
     <div className="h-full flex flex-col">
       <header className="px-4 py-2 border-b border-zinc-800 flex items-center gap-3">
+        {files.length > 0 ? (
+          <button
+            onClick={() => setShowSidebar((v) => !v)}
+            title={showSidebar ? "Hide file list" : "Show file list"}
+            aria-label={showSidebar ? "Hide file list" : "Show file list"}
+            aria-pressed={showSidebar}
+            className="px-2 py-1 text-sm rounded hover:bg-zinc-800 text-zinc-400"
+          >
+            ☰
+          </button>
+        ) : null}
         <span className="font-semibold">DIE-Web</span>
         <span className="text-xs text-zinc-500">Detect It Easy in your browser</span>
         <div className="ml-auto flex items-center gap-1">
@@ -78,13 +90,15 @@ export function App() {
           <DropZone />
         </div>
       ) : (
-        <div className="flex-1 grid grid-cols-[260px_1fr] min-h-0">
-          <aside className="border-r border-zinc-800 overflow-y-auto">
-            <FileList />
-            <div className="p-3 border-t border-zinc-800">
-              <DropZone compact />
-            </div>
-          </aside>
+        <div className={`flex-1 grid min-h-0 ${showSidebar ? "grid-cols-[260px_1fr]" : "grid-cols-1"}`}>
+          {showSidebar ? (
+            <aside className="border-r border-zinc-800 overflow-y-auto">
+              <FileList />
+              <div className="p-3 border-t border-zinc-800">
+                <DropZone compact />
+              </div>
+            </aside>
+          ) : null}
           <main className="overflow-y-auto">
             {activeId ? <ScanResultPanel fileId={activeId} /> : null}
           </main>
