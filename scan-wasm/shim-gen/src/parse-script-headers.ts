@@ -1,4 +1,3 @@
-
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -10,7 +9,7 @@ const VISIBILITY_RE = /^\s*(public|private|protected)(\s+slots)?\s*:\s*$|^\s*(si
 const CLASS_RE = /^\s*class\s+(\w+_Script)\s*(?::\s*public\s+(\w+))?\b/;
 
 function parentJsClassOf(baseClass: string | undefined): string | null {
-  if (!baseClass || !baseClass.endsWith("_Script")) return null;   
+  if (!baseClass || !baseClass.endsWith("_Script")) return null;
   return baseClass.replace(/_Script$/, "");
 }
 
@@ -57,7 +56,7 @@ function parseParams(argsStr: string): CppParam[] {
 
 export interface ParsedHeader {
   methods: CppMethod[];
-  
+
   parents: Record<string, string | null>;
 }
 
@@ -111,7 +110,7 @@ export function parseHeader(path: string): ParsedHeader {
       cppReturn,
       params,
       isHotPath: isHotPath({ name, cppReturn, params }),
-      methodId: -1, 
+      methodId: -1,
     });
   }
 

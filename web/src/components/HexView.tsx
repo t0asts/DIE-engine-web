@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from "react";
 
 interface Props {
@@ -6,8 +5,8 @@ interface Props {
 }
 
 const ROW_BYTES = 16;
-const ROW_HEIGHT = 18;          
-const OVERSCAN = 4;             
+const ROW_HEIGHT = 18;
+const OVERSCAN = 4;
 
 export function HexView({ bytes }: Props) {
   const totalRows = Math.ceil(bytes.length / ROW_BYTES);

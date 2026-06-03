@@ -1,3 +1,6 @@
 [submodule "scan-wasm/third_party/DIE-engine"]
 	path = scan-wasm/third_party/DIE-engine
 	url = https://github.com/horsicq/DIE-engine.git
+[submodule "decompile-wasm/third_party/ghidra"]
+	path = decompile-wasm/third_party/ghidra
+	url = https://github.com/NationalSecurityAgency/ghidra.git

@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import { useSettings, type Settings } from "../store/settings";

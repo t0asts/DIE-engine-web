@@ -1,10 +1,9 @@
-
 import type { StringEntry } from "./protocol";
 
 export interface StringsScanOptions {
-  minLen?: number;       
-  maxResults?: number;   
-  scanUtf16?: boolean;   
+  minLen?: number;
+  maxResults?: number;
+  scanUtf16?: boolean;
 }
 
 export function scanStrings(bytes: Uint8Array, opts: StringsScanOptions = {}): StringEntry[] {

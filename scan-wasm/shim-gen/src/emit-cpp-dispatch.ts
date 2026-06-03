@@ -1,28 +1,45 @@
-
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
 import type { CppMethod, CppParam } from "./types.ts";
 
 interface DispatchOptions {
-  outPath: string;            
+  outPath: string;
 }
 
-const ARG_DECODERS: Record<string, (idx: number, name: string) => string> = {
-  "bool":      (i, n) => `bool ${n} = args[${i}].toBool();`,
-  "qint8":     (i, n) => `qint8 ${n} = static_cast<qint8>(args[${i}].toInt());`,
-  "quint8":    (i, n) => `quint8 ${n} = static_cast<quint8>(args[${i}].toInt());`,
-  "qint16":    (i, n) => `qint16 ${n} = static_cast<qint16>(args[${i}].toInt());`,
-  "quint16":   (i, n) => `quint16 ${n} = static_cast<quint16>(args[${i}].toInt());`,
-  "qint32":    (i, n) => `qint32 ${n} = args[${i}].toVariant().toInt();`,
-  "quint32":   (i, n) => `quint32 ${n} = args[${i}].toVariant().toUInt();`,
-  "qint64":    (i, n) => `qint64 ${n} = args[${i}].toVariant().toLongLong();`,
-  "quint64":   (i, n) => `quint64 ${n} = args[${i}].toVariant().toULongLong();`,
-  "int":       (i, n) => `int ${n} = args[${i}].toInt();`,
-  "double":    (i, n) => `double ${n} = args[${i}].toDouble();`,
-  "float":     (i, n) => `float ${n} = static_cast<float>(args[${i}].toDouble());`,
-  "QString":   (i, n) => `QString ${n} = args[${i}].toString();`,
+const SCALAR_ARGS: Record<string, { ctype: string; expr: (i: number) => string }> = {
+  "bool":      { ctype: "bool",    expr: (i) => `args[${i}].toBool()` },
+  "qint8":     { ctype: "qint8",   expr: (i) => `static_cast<qint8>(args[${i}].toInt())` },
+  "quint8":    { ctype: "quint8",  expr: (i) => `static_cast<quint8>(args[${i}].toInt())` },
+  "qint16":    { ctype: "qint16",  expr: (i) => `static_cast<qint16>(args[${i}].toInt())` },
+  "quint16":   { ctype: "quint16", expr: (i) => `static_cast<quint16>(args[${i}].toInt())` },
+  "qint32":    { ctype: "qint32",  expr: (i) => `args[${i}].toVariant().toInt()` },
+  "quint32":   { ctype: "quint32", expr: (i) => `args[${i}].toVariant().toUInt()` },
+  "qint64":    { ctype: "qint64",  expr: (i) => `args[${i}].toVariant().toLongLong()` },
+  "quint64":   { ctype: "quint64", expr: (i) => `args[${i}].toVariant().toULongLong()` },
+  "int":       { ctype: "int",     expr: (i) => `args[${i}].toInt()` },
+  "double":    { ctype: "double",  expr: (i) => `args[${i}].toDouble()` },
+  "float":     { ctype: "float",   expr: (i) => `static_cast<float>(args[${i}].toDouble())` },
+  "QString":   { ctype: "QString", expr: (i) => `args[${i}].toString()` },
 };
+
+function cppDefaultLiteral(t: string, raw: string): string | null {
+  const v = raw.trim();
+  if (t === "bool") {
+    if (/^(true|false)$/i.test(v)) return v.toLowerCase();
+    if (/^[01]$/.test(v)) return v === "1" ? "true" : "false";
+    return null;
+  }
+  if (t === "QString") {
+    if (/^QString\s*\(\s*\)$/.test(v)) return "QString()";
+    if (/^"(?:[^"\\]|\\.)*"$/.test(v)) return `QString::fromUtf8(${v})`;
+    return null;
+  }
+  if (/^[+-]?\d+$/.test(v)) return v;
+  if (/^[+-]?0x[0-9a-fA-F]+$/.test(v)) return v;
+  if (/^[+-]?\d*\.\d+f?$/.test(v)) return v;
+  return null;
+}
 
 const RET_ENCODERS: Record<string, (expr: string) => string> = {
   "void":      ()    => `Q_UNUSED(retval); return mkResult(QJsonValue());`,
@@ -58,8 +75,18 @@ function listInnerType(t: string): string | null {
 function decodeArg(p: CppParam, idx: number): string | null {
   const t = normalizeType(p.cppType);
   const safe = `arg${idx}`;
-  const dec = ARG_DECODERS[t];
-  if (dec) return dec(idx, safe);
+  const scalar = SCALAR_ARGS[t];
+  if (scalar) {
+    const decode = scalar.expr(idx);
+    if (p.defaultValue !== undefined) {
+      const def = cppDefaultLiteral(t, p.defaultValue);
+      if (def !== null) {
+        return `${scalar.ctype} ${safe} = (${idx} < args.size() && !args[${idx}].isUndefined() && !args[${idx}].isNull())`
+          + ` ? static_cast<${scalar.ctype}>(${decode}) : static_cast<${scalar.ctype}>(${def});`;
+      }
+    }
+    return `${scalar.ctype} ${safe} = ${decode};`;
+  }
 
   const inner = listInnerType(t);
   if (inner === "QString") {
@@ -98,7 +125,6 @@ function encodeReturn(cppReturn: string, callExpr: string): string {
 }
 
 function caseBody(m: CppMethod): string {
-  
   const cppClass = m.className;
   const cast = cppClass === "Binary_Script"
     ? `auto* obj = session->script();`

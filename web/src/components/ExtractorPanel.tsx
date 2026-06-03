@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import { useWorkspace } from "../store/workspace";
@@ -6,7 +5,7 @@ import type { ExtractEntry } from "../worker/protocol";
 
 interface Props {
   records: ExtractEntry[];
-  bytes: ArrayBuffer;        
+  bytes: ArrayBuffer;
   parentName: string;
 }
 

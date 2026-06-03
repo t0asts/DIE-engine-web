@@ -12,6 +12,8 @@ export function HashPanel({ hashes }: { hashes: Hashes }) {
         <Row label="MD5"    value={hashes.md5} />
         <Row label="SHA-1"  value={hashes.sha1} />
         <Row label="SHA-256" value={hashes.sha256} />
+        {hashes.importHash32 ? <Row label="Import hash (32)" value={hashes.importHash32} /> : null}
+        {hashes.importHash64 ? <Row label="Import hash (64)" value={hashes.importHash64} /> : null}
       </dl>
       {looksLikeSha256 ? (
         <div className="mt-2 text-xs text-zinc-500 flex flex-wrap items-center gap-x-3 gap-y-1">

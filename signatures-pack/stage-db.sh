@@ -95,12 +95,4 @@ for db in dbs:
     manifest["dbs"][db] = formats
 
 (dist / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-
-total_files = sum(len(v) for db in manifest["dbs"].values() for v in db.values())
-total_size  = sum(e["size"] for db in manifest["dbs"].values()
-                            for v in db.values() for e in v)
-print(f"staged {total_files} files, {total_size/1024:.1f} KB across {len(manifest['dbs'])} db tree(s)")
-for db, fmts in manifest["dbs"].items():
-    sg = sum(1 for v in fmts.values() for e in v if e["kind"] == "sg")
-    print(f"  {db}: {len(fmts)} formats, {sg} .sg files")
 PY

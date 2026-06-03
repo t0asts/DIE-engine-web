@@ -6,6 +6,8 @@ on:
     paths:
       - "scan-wasm/**"
       - "signatures-pack/**"
+      - "decompile-wasm/**"
+      - "specs/**"
       - "web/**"
       - "docker/**"
       - ".github/workflows/build.yml"
@@ -79,10 +81,43 @@ jobs:
         with:
           name: scan-wasm
           path: scan-wasm/dist/
+      - name: Build wasm decompiler core
+        run: |
+          docker run --rm -v "$PWD:/work" -w /work die-web-dev \
+            bash -c '. /opt/emsdk/emsdk_env.sh && ./decompile-wasm/build.sh'
+      - name: Decompiler bundle-size budget (<= 16 MB uncompressed)
+        run: |
+          size=$(stat -c %s decompile-wasm/dist/decompile_engine.wasm)
+          echo "decompile_engine.wasm = $size bytes"
+          if [ "$size" -gt 16777216 ]; then
+            echo "::error ::decompiler wasm exceeds 16 MB budget"
+            exit 1
+          fi
+      - name: Upload decompiler wasm
+        uses: actions/upload-artifact@v4
+        with:
+          name: decompile-wasm
+          path: decompile-wasm/dist/
+
+  specs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - name: Install zlib (host sleigh build)
+        run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
+      - name: Stage SLEIGH specs
+        run: ./specs/stage-specs.sh
+      - name: Upload specs
+        uses: actions/upload-artifact@v4
+        with:
+          name: specs
+          path: specs/dist/
 
   ui:
     runs-on: ubuntu-latest
-    needs: [shim-gen, signatures-pack, wasm]
+    needs: [shim-gen, signatures-pack, wasm, specs]
     steps:
       - uses: actions/checkout@v4
         with:
@@ -101,17 +136,27 @@ jobs:
         with:
           name: signatures-pack
           path: signatures-pack/dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: decompile-wasm
+          path: decompile-wasm/dist/
+      - uses: actions/download-artifact@v4
+        with:
+          name: specs
+          path: specs/dist/
       - name: Build UI
         run: |
           cd web
           npm ci
           npm run typecheck
           npm run build
-      - name: Stage scan-engine + signatures into web/dist
+      - name: Stage engines + data into web/dist
         run: |
-          mkdir -p web/dist/scan-engine web/dist/signatures-pack
+          mkdir -p web/dist/scan-engine web/dist/signatures-pack web/dist/decompile-engine web/dist/specs
           cp -R scan-wasm/dist/. web/dist/scan-engine/
           cp -R signatures-pack/dist/. web/dist/signatures-pack/
+          cp -R decompile-wasm/dist/. web/dist/decompile-engine/
+          cp -R specs/dist/. web/dist/specs/
       - name: Upload site
         uses: actions/upload-artifact@v4
         with:
@@ -130,6 +175,10 @@ jobs:
         with: { name: scan-wasm,        path: scan-wasm/dist/ }
       - uses: actions/download-artifact@v4
         with: { name: signatures-pack,  path: signatures-pack/dist/ }
+      - uses: actions/download-artifact@v4
+        with: { name: decompile-wasm,   path: decompile-wasm/dist/ }
+      - uses: actions/download-artifact@v4
+        with: { name: specs,            path: specs/dist/ }
       - name: Build runtime image
         run: |
           docker build -t die-web-runtime:${{ github.sha }} \

@@ -6,17 +6,19 @@ export default defineConfig({
   server: {
     port: 5173,
     fs: {
-      
       strict: false,
     },
   },
   worker: {
     format: "es",
   },
+  optimizeDeps: {
+    include: ["monaco-editor", "@monaco-editor/react"],
+  },
   build: {
     target: "esnext",
     sourcemap: true,
   },
-  
+
   assetsInclude: ["**/*.wasm"],
 });

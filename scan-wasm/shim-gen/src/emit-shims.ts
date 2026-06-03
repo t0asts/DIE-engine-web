@@ -1,4 +1,3 @@
-
 import { writeFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 
@@ -6,8 +5,8 @@ import type { BindingManifest, CppMethod } from "./types.ts";
 import { jsTypeOf } from "./types.ts";
 
 interface EmitOptions {
-  manifestPath: string;     
-  shimsPath: string;        
+  manifestPath: string;
+  shimsPath: string;
   generatedFrom: { repo: string; commit?: string; headers: string[] };
 }
 

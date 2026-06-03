@@ -1,4 +1,3 @@
-
 #include "xdeflatedecoder.h"
 #include "xzstddecoder.h"
 #include "xbrotlidecoder.h"

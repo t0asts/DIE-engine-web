@@ -1,10 +1,8 @@
-
 import { create } from "zustand";
 
 import type { ScanOptions } from "../worker/protocol";
 
 export interface Settings {
-  
   deepScan: boolean;
   heuristicScan: boolean;
   aggressiveScan: boolean;
@@ -12,9 +10,9 @@ export interface Settings {
   overlayScan: boolean;
   resourcesScan: boolean;
   archivesScan: boolean;
-  verbose: boolean;          
-  
-  stringsMinLen: number;     
+  verbose: boolean;
+
+  stringsMinLen: number;
 }
 
 export const SETTINGS_DEFAULTS: Settings = {
@@ -50,10 +48,9 @@ interface SettingsState extends Settings {
 }
 
 function persist(state: SettingsState): void {
-  
   const { set, reset, ...data } = state;
   void set; void reset;
-  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {  }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(data)); } catch {}
 }
 
 export const useSettings = create<SettingsState>((setState, getState) => ({
@@ -80,12 +77,4 @@ export function scanOptionsFromSettings(s: Settings): ScanOptions {
     verbose: s.verbose,
     stringsMinLen: s.stringsMinLen,
   };
-}
-
-const SCAN_AFFECTING: (keyof Settings)[] = [
-  "deepScan", "heuristicScan", "aggressiveScan", "recursiveScan",
-  "overlayScan", "resourcesScan", "archivesScan", "verbose", "stringsMinLen",
-];
-export function settingsAffectScan(a: Settings, b: Settings): boolean {
-  return SCAN_AFFECTING.some((k) => a[k] !== b[k]);
 }

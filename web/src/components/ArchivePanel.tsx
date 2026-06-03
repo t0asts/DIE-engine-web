@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 
 import { useWorkspace } from "../store/workspace";
@@ -6,8 +5,8 @@ import type { ArchiveListing, ArchiveEntry } from "../worker/protocol";
 
 interface Props {
   archive: ArchiveListing;
-  bytes: ArrayBuffer;        
-  parentName: string;        
+  bytes: ArrayBuffer;
+  parentName: string;
 }
 
 type SortKey = "name" | "size" | "compressedSize" | "ratio";
@@ -36,7 +35,7 @@ export function ArchivePanel({ archive, bytes, parentName }: Props) {
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [asc, setAsc] = useState(true);
   const [hideDirs, setHideDirs] = useState(false);
-  const [busy, setBusy] = useState<string | null>(null);   
+  const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<{ name: string; msg: string } | null>(null);
 
   const scanEntry = async (e: ArchiveEntry) => {

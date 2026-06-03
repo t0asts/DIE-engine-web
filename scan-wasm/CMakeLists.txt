@@ -50,10 +50,23 @@ add_library(capstone STATIC
     ${_CS_SRC}/arch/AArch64/AArch64InstPrinter.c
     ${_CS_SRC}/arch/AArch64/AArch64Mapping.c
     ${_CS_SRC}/arch/AArch64/AArch64Module.c
+    ${_CS_SRC}/arch/Mips/MipsDisassembler.c
+    ${_CS_SRC}/arch/Mips/MipsInstPrinter.c
+    ${_CS_SRC}/arch/Mips/MipsMapping.c
+    ${_CS_SRC}/arch/Mips/MipsModule.c
+    ${_CS_SRC}/arch/PowerPC/PPCDisassembler.c
+    ${_CS_SRC}/arch/PowerPC/PPCInstPrinter.c
+    ${_CS_SRC}/arch/PowerPC/PPCMapping.c
+    ${_CS_SRC}/arch/PowerPC/PPCModule.c
+    ${_CS_SRC}/arch/RISCV/RISCVDisassembler.c
+    ${_CS_SRC}/arch/RISCV/RISCVInstPrinter.c
+    ${_CS_SRC}/arch/RISCV/RISCVMapping.c
+    ${_CS_SRC}/arch/RISCV/RISCVModule.c
 )
 target_include_directories(capstone PUBLIC ${_CS_SRC}/include)
 target_compile_definitions(capstone PRIVATE
     CAPSTONE_HAS_X86 CAPSTONE_HAS_ARM CAPSTONE_HAS_ARM64
+    CAPSTONE_HAS_MIPS CAPSTONE_HAS_POWERPC CAPSTONE_HAS_RISCV
     CAPSTONE_X86_ATT_DISABLE CAPSTONE_X86_REDUCE
     CAPSTONE_DIET_NO CAPSTONE_USE_SYS_DYN_MEM _LIB
 )
@@ -124,6 +137,8 @@ add_executable(scan_engine
     ${XDISASMCORE_SOURCES}
     ${XARCHIVE_SOURCES}
     ${DIE_ROOT}/XExtractor/xextractor.cpp
+    ${DIE_ROOT}/XDemangle/xdemangle.cpp
+    ${DIE_ROOT}/XDemangle/xdemangle.h
 )
 
 target_include_directories(scan_engine PRIVATE
@@ -137,6 +152,7 @@ target_include_directories(scan_engine PRIVATE
     ${DIE_ROOT}/XFileInfo
     ${DIE_ROOT}/XCapstone
     ${DIE_ROOT}/XCppfilt
+    ${DIE_ROOT}/XDemangle
     ${DIE_ROOT}/XMIME
     ${DIE_ROOT}/XDisasmCore
     ${DIE_ROOT}/XArchive
@@ -193,6 +209,7 @@ set(EXPORTED_FUNCTIONS_LIST
     "_die_get_mime"
     "_die_extract"
     "_die_demangle"
+    "_die_get_import_hash"
     "_malloc"
     "_free"
 )

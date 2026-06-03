@@ -1,11 +1,10 @@
-
 import { create } from "zustand";
 
 export interface RecentFile {
   name: string;
   size: number;
   format: string;
-  when: number;              
+  when: number;
 }
 
 const LS_KEY = "die-web.recent.v1";
@@ -20,7 +19,7 @@ function load(): RecentFile[] {
   } catch { return []; }
 }
 function save(list: RecentFile[]): void {
-  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch {  }
+  try { localStorage.setItem(LS_KEY, JSON.stringify(list)); } catch {}
 }
 
 interface RecentState {

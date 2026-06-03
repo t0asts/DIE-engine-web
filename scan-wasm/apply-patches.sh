@@ -20,10 +20,10 @@ for p in "$PATCHES"/*.patch; do
     continue
   fi
   if git -C "$d" apply --reverse --check "$p" >/dev/null 2>&1; then
-    echo "apply-patches: $sub already applied"
-  elif git -C "$d" apply --check "$p" >/dev/null 2>&1; then
+    continue
+  fi
+  if git -C "$d" apply --check "$p" >/dev/null 2>&1; then
     git -C "$d" apply "$p"
-    echo "apply-patches: $sub applied"
   else
     echo "apply-patches: WARNING - $sub.patch does not apply cleanly (DIE-engine moved? merged upstream?), skipping" >&2
   fi

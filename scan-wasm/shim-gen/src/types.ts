@@ -1,29 +1,28 @@
-
 export interface CppParam {
-  cppType: string;          
-  name: string;             
-  defaultValue?: string;    
+  cppType: string;
+  name: string;
+  defaultValue?: string;
 }
 
 export interface CppMethod {
-  className: string;        
-  jsClass: string;          
-  parentJsClass: string | null; 
-  name: string;             
-  cppReturn: string;        
+  className: string;
+  jsClass: string;
+  parentJsClass: string | null;
+  name: string;
+  cppReturn: string;
   params: CppParam[];
-  isHotPath: boolean;       
-  methodId: number;         
+  isHotPath: boolean;
+  methodId: number;
 }
 
 export interface BindingManifest {
   version: number;
   generatedFrom: { repo: string; commit?: string; headers: string[] };
-  hotPathExports: string[];   
-  
+  hotPathExports: string[];
+
   parents: Record<string, string | null>;
   classes: {
-    name: string;             
+    name: string;
     cppClass: string;
     methods: {
       name: string;
@@ -31,13 +30,12 @@ export interface BindingManifest {
       jsReturn: string;
       jsParams: { name: string; type: string; optional: boolean }[];
       isHotPath: boolean;
-      hotPathExport?: string; 
+      hotPathExport?: string;
     }[];
   }[];
 }
 
 export function jsTypeOf(cppType: string): string {
-  
   const t = cppType
     .replace(/\bconst\b/g, "")
     .replace(/[&*]/g, "")
@@ -65,7 +63,7 @@ export function jsTypeOf(cppType: string): string {
     case "quint64":
     case "qlonglong":
     case "qulonglong":
-      
+
       return "number";
     case "QString":
       return "string";

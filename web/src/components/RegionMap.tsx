@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 
 import type { MemoryRecord } from "../worker/protocol";

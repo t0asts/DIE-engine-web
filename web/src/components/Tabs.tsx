@@ -1,17 +1,16 @@
-
 import type { ReactNode } from "react";
 
 export interface TabDef {
   id: string;
   label: string;
-  badge?: string | number;   
+  badge?: string | number;
 }
 
 interface Props {
   tabs: TabDef[];
   activeId: string;
   onChange(id: string): void;
-  trailing?: ReactNode;       
+  trailing?: ReactNode;
 }
 
 export function Tabs({ tabs, activeId, onChange, trailing }: Props) {

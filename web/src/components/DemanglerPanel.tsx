@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import { useWorkspace } from "../store/workspace";
@@ -8,6 +7,8 @@ const SAMPLE_SYMBOLS = [
   "_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEED1Ev",
   "_RNvCs1AB_3std4testE",
   "_ZNSt8ios_base4InitC1Ev",
+  "??2@YAPAXI@Z",
+  "?h@@YAXH@Z",
 ];
 
 export function DemanglerPanel() {
@@ -54,7 +55,7 @@ export function DemanglerPanel() {
             {status === "running" ? "Demangling…" : "Demangle"}
           </button>
           <span className="text-xs text-zinc-500">
-            Tries GnuV3 → Rust → D → JavaV3 → GNAT
+            Auto-detects scheme: MSVC, Itanium/GnuV3, Rust, D, Java, GNAT, Borland
           </span>
         </div>
       </div>

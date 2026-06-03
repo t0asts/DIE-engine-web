@@ -24,5 +24,5 @@ qint64 WebFileDevice::readData(char* dest, qint64 maxSize) {
 }
 
 qint64 WebFileDevice::writeData(const char* , qint64 ) {
-    return -1;  
+    return -1;
 }

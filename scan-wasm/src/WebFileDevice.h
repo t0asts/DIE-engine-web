@@ -1,4 +1,3 @@
-
 #pragma once
 
 #include <QIODevice>
@@ -8,7 +7,7 @@ class WebFileDevice : public QIODevice {
     Q_OBJECT
 
 public:
-    
+
     WebFileDevice(const uint8_t* data, qint64 size, QObject* parent = nullptr);
     ~WebFileDevice() override;
 

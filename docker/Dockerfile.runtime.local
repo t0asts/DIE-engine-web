@@ -1,8 +1,10 @@
 FROM die-web-runtime:latest
 
-RUN rm -rf /usr/share/nginx/html/* && mkdir -p /usr/share/nginx/html/scan-engine /usr/share/nginx/html/signatures-pack
+RUN rm -rf /usr/share/nginx/html/* && mkdir -p /usr/share/nginx/html/scan-engine /usr/share/nginx/html/signatures-pack /usr/share/nginx/html/decompile-engine /usr/share/nginx/html/specs
 COPY web/dist             /usr/share/nginx/html/
 COPY scan-wasm/dist       /usr/share/nginx/html/scan-engine/
 COPY signatures-pack/dist /usr/share/nginx/html/signatures-pack/
+COPY decompile-wasm/dist  /usr/share/nginx/html/decompile-engine/
+COPY specs/dist           /usr/share/nginx/html/specs/
 COPY docker/nginx.conf    /etc/nginx/conf.d/default.conf
 EXPOSE 80

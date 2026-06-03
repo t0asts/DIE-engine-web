@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemoryMap } from "../worker/protocol";
@@ -11,7 +10,7 @@ interface Props {
 interface PeidSig { name: string; pattern: (number | null)[]; epOnly: boolean; }
 
 const BUNDLED_URL = "/signatures-pack/peid/userdb.txt";
-const NONEP_SEARCH_CAP = 8 * 1024 * 1024;   
+const NONEP_SEARCH_CAP = 8 * 1024 * 1024;
 
 function parseUserDb(text: string): PeidSig[] {
   const out: PeidSig[] = [];
@@ -103,7 +102,7 @@ export function PeidPanel({ bytes, memoryMap }: Props) {
 
   const runScan = useCallback((parsed: PeidSig[]) => {
     setStatus("scanning");
-    
+
     setTimeout(() => {
       try { setResult(scan(view, memoryMap, parsed)); setStatus("done"); }
       catch (e) { setError((e as Error).message); setStatus("error"); }

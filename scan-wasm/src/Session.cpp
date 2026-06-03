@@ -236,7 +236,7 @@ Factory makeFactory(QIODevice* device, XBinary::FT ft, Binary_Script::OPTIONS* o
     return {b, new Binary_Script(b, FILEPART, opts, pd), "Binary"};
 }
 
-}  
+}
 
 bool Session::open(const uint8_t* bytes, size_t size, const char* optionsJson) {
     m_bytesOwned.assign(bytes, bytes + size);
@@ -258,4 +258,4 @@ bool Session::open(const uint8_t* bytes, size_t size, const char* optionsJson) {
     return true;
 }
 
-}  
+}

@@ -1,12 +1,11 @@
-
 import { makeBindings, METHOD_IDS, bindingChain } from "../wasm-bindings/_generated";
 import type { SessionHandle } from "../wasm-bindings/session";
 import type { ScanRecord } from "../worker/protocol";
 
 export interface RunScanOpts {
-  jsClass: string;                        
+  jsClass: string;
   sessionId: number;
-  verbose?: boolean;                      
+  verbose?: boolean;
   invokeHot(exportName: string, args: unknown[]): unknown;
   invokeBinding(methodId: number, args: unknown[]): unknown;
   fetchSignatureFile(relPath: string): Promise<string>;
@@ -16,22 +15,9 @@ export interface RunScanOpts {
   };
 }
 
-export interface ScriptOutcome {
-  path: string;
-  ok: boolean;
-  durationMs: number;
-  records: number;            
-  error?: string;
-  logs?: string[];            
-}
-
 export interface RunScanResult {
   records: ScanRecord[];
   errors: string[];
-  scriptOutcomes: ScriptOutcome[];   
-  scriptsAttempted: number;
-  scriptsSucceeded: number;
-  scriptsFailed: number;
 }
 
 interface SigEntry { path: string; size: number; kind: string }
@@ -119,55 +105,26 @@ export async function runScan(opts: RunScanOpts): Promise<RunScanResult> {
 
   const allRecords: ScanRecord[] = [];
   const errors: string[] = [];
-  const scriptOutcomes: ScriptOutcome[] = [];
 
   if (!rootInitEntry) {
     errors.push("db/_init (framework prelude) missing from signature pack - detections will fail");
   }
 
   for (const sg of sgEntries) {
-    const logs: string[] = [];
-    const t0 = performance.now();
-    const recordsBefore = allRecords.length;
-    let ok = true;
-    let outcomeError: string | undefined;
     try {
       const sgSource = await loadFile(sg.path);
       await evalScript(
         { rootInitSource, formatInitSource, sgSource, resolveInclude },
-        { binding: bindingObj, fmt: opts.jsClass, records: allRecords, logs },
+        { binding: bindingObj, fmt: opts.jsClass, records: allRecords },
       );
     } catch (e) {
-      ok = false;
       const err = e as Error | string;
       const msg = typeof err === "string" ? err : err.message;
-      const stackHead = typeof err !== "string" && err.stack
-        ? "\n  " + err.stack.split("\n").slice(0, 4).join("\n  ")
-        : "";
-      outcomeError = msg + stackHead;
       errors.push(`${sg.path}: ${msg}`);
     }
-    const outcome: ScriptOutcome = {
-      path: sg.path,
-      ok,
-      durationMs: Math.round((performance.now() - t0) * 100) / 100,
-      records: allRecords.length - recordsBefore,
-    };
-    if (outcomeError) outcome.error = outcomeError;
-    if (logs.length) outcome.logs = logs;
-    scriptOutcomes.push(outcome);
   }
 
-  const scriptsAttempted = scriptOutcomes.length;
-  const scriptsFailed = scriptOutcomes.filter((o) => !o.ok).length;
-  return {
-    records: allRecords,
-    errors,
-    scriptOutcomes,
-    scriptsAttempted,
-    scriptsSucceeded: scriptsAttempted - scriptsFailed,
-    scriptsFailed,
-  };
+  return { records: allRecords, errors };
 }
 
 interface EvalSource {
@@ -179,8 +136,7 @@ interface EvalSource {
 interface EvalCtx {
   binding: unknown;
   fmt: string;
-  records: ScanRecord[];   
-  logs: string[];          
+  records: ScanRecord[];
 }
 
 const INCLUDE_RE = /includeScript\(\s*["']([^"']+)["']\s*\)\s*;?/g;
@@ -203,16 +159,10 @@ async function evalScript(src: EvalSource, ctx: EvalCtx): Promise<void> {
       out += source.slice(last, h.idx);
       last = h.idx + h.len;
       const key = h.name.toLowerCase();
-      if (seen.has(key)) continue;       
+      if (seen.has(key)) continue;
       seen.add(key);
       const inc = await src.resolveInclude(h.name);
-      if (inc != null) {
-        out += `\n/* >>> includeScript(${JSON.stringify(h.name)}) */\n`
-             + (await inline(inc))
-             + `\n/* <<< end ${h.name} */\n`;
-      } else {
-        out += `\n/* includeScript(${JSON.stringify(h.name)}): NOT FOUND */\n`;
-      }
+      out += inc != null ? "\n" + (await inline(inc)) + "\n" : "\n";
     }
     out += source.slice(last);
     return out;
@@ -246,7 +196,7 @@ async function evalScript(src: EvalSource, ctx: EvalCtx): Promise<void> {
 
     includeScript: (_name?: unknown) => undefined,
 
-    _log: (s?: unknown) => { ctx.logs.push(String(s ?? "")); },
+    _log: (_s?: unknown) => undefined,
     _setResult: pushRecord,
     _isResultPresent: (t?: unknown, n?: unknown) =>
       ctx.records.some((r) => r.type === String(t ?? "") && r.name === String(n ?? "")),

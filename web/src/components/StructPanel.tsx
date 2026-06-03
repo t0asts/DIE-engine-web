@@ -1,4 +1,3 @@
-
 import { useMemo, useState } from "react";
 
 import type { StructNode } from "../worker/protocol";
@@ -26,7 +25,7 @@ function TreeNode({
   defaultOpen: boolean;
 }) {
   const hasKids = !!node.children && node.children.length > 0;
-  
+
   const forcedOpen = filter ? true : undefined;
   const [open, setOpen] = useState(defaultOpen);
   const isOpen = forcedOpen ?? open;
@@ -58,7 +57,7 @@ function TreeNode({
       </div>
       {hasKids && isOpen
         ? visibleKids.map((c, i) => (
-            
+
             <TreeNode key={i} node={c} filter={filter} depth={depth + 1} defaultOpen={depth + 1 < 2} />
           ))
         : null}
@@ -94,7 +93,7 @@ export function StructPanel({ structure }: Props) {
           <div className="px-3 py-6 text-center text-zinc-500">No fields match the filter.</div>
         ) : (
           groups.map((g, i) => (
-            
+
             <TreeNode key={i} node={g} filter={f} depth={0} defaultOpen />
           ))
         )}

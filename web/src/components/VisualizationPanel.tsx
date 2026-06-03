@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import type { MemoryMap } from "../worker/protocol";
@@ -23,15 +22,15 @@ function byteClass(b: number): 0 | 1 | 2 | 3 {
   return 1;
 }
 const CLASS_COLORS: [number, number, number][] = [
-  [10, 10, 12],     
-  [96, 165, 250],   
-  [52, 211, 153],   
-  [248, 113, 113],  
+  [10, 10, 12],
+  [96, 165, 250],
+  [52, 211, 153],
+  [248, 113, 113],
 ];
 
 function entropyColor(h: number): [number, number, number] {
   const t = Math.max(0, Math.min(1, h / 8));
-  
+
   if (t < 0.5) {
     const u = t / 0.5;
     return [Math.round(30 + u * (250 - 30)), Math.round(58 + u * (204 - 58)), Math.round(138 + u * (21 - 138))];
@@ -63,7 +62,7 @@ export function VisualizationPanel({ bytes, memoryMap }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   const size = view.length;
-  const bpp = Math.max(1, Math.ceil(size / (GW * GH)));   
+  const bpp = Math.max(1, Math.ceil(size / (GW * GH)));
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -78,7 +77,7 @@ export function VisualizationPanel({ bytes, memoryMap }: Props) {
     const cells = GW * GH;
     for (let c = 0; c < cells; c++) {
       const start = c * bpp;
-      if (start >= size) { 
+      if (start >= size) {
         const o = c * 4; d[o] = 18; d[o + 1] = 18; d[o + 2] = 22; d[o + 3] = 255;
         continue;
       }
@@ -90,7 +89,6 @@ export function VisualizationPanel({ bytes, memoryMap }: Props) {
         const v = Math.round(sum / (end - start));
         r = g = b = v;
       } else if (mode === "class") {
-        
         const cnt = new Uint32Array(4);
         for (let i = start; i < end; i++) { const ci = byteClass(view[i] ?? 0); cnt[ci] = (cnt[ci] ?? 0) + 1; }
         let best = 0;

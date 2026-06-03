@@ -1,4 +1,3 @@
-
 export type ScanOptions = {
   deepScan?: boolean;
   heuristicScan?: boolean;
@@ -8,15 +7,8 @@ export type ScanOptions = {
   resourcesScan?: boolean;
   archivesScan?: boolean;
   verbose?: boolean;
-  stringsMinLen?: number;    
+  stringsMinLen?: number;
 };
-
-export type FormatId =
-  | "Binary" | "PE" | "ELF" | "MACH" | "MACHOFAT" | "MSDOS" | "COM"
-  | "NE" | "LE" | "LX" | "DEX" | "PDF" | "CFBF" | "Jpeg" | "PNG"
-  | "RAR" | "ZIP" | "JAR" | "APK" | "IPA" | "NPM" | "ISO9660"
-  | "Amiga" | "AtariST" | "JavaClass" | "PYC" | "DOS16M" | "DOS4G"
-  | "Archive" | "Image";
 
 export interface FileInfo {
   size: number;
@@ -28,6 +20,8 @@ export interface Hashes {
   md5: string;
   sha1: string;
   sha256: string;
+  importHash32?: string;
+  importHash64?: string;
 }
 
 export interface EntropyPoint {
@@ -36,31 +30,12 @@ export interface EntropyPoint {
 }
 
 export interface ScanRecord {
-  type: string;             
-  name: string;             
+  type: string;
+  name: string;
   version?: string;
   options?: string;
   language?: string;
   description?: string;
-}
-
-export interface ScriptOutcome {
-  path: string;
-  ok: boolean;
-  durationMs: number;
-  records: number;
-  error?: string;
-  logs?: string[];
-}
-
-export interface DebugLog {
-  fileName?: string;
-  fileSize: number;
-  jsClass: string;                  
-  scriptsAttempted: number;
-  scriptsSucceeded: number;
-  scriptsFailed: number;
-  scriptOutcomes: ScriptOutcome[];  
 }
 
 export interface MemoryRecord {
@@ -96,88 +71,87 @@ export interface StringEntry {
 export interface ArchiveEntry {
   name: string;
   isDir: boolean;
-  size: number;             
+  size: number;
   compressedSize: number;
-  method: string;           
+  method: string;
   crc32: number;
-  date?: string;            
+  date?: string;
   encrypted: boolean;
 }
 
 export interface ArchiveListing {
-  kind: string;             
+  kind: string;
   entries: ArchiveEntry[];
-  totalEntries: number;     
-  totalSize: number;        
+  totalEntries: number;
+  totalSize: number;
   totalCompressedSize: number;
-  truncated: boolean;       
+  truncated: boolean;
   comment?: string;
-  note?: string;            
+  note?: string;
 }
 
 export interface ExtractEntry {
   offset: number;
   size: number;
-  type: string;              
+  type: string;
   name?: string;
   ext?: string;
-  string?: string;           
+  string?: string;
 }
 
 export interface StructNode {
   name: string;
-  value?: string;            
+  value?: string;
   children?: StructNode[];
 }
 
 export interface DisasmInsn {
   address: number;
   size: number;
-  hex: string;               
-  mnemonic: string;          
+  hex: string;
+  mnemonic: string;
   operands: string;
-  branch?: number;           
+  branch?: number;
 }
 
 export type DisasmMode = "auto" | "arm" | "thumb" | "cortexm";
 
 export interface DisasmResult {
-  mode: string;              
-                             
+  mode: string;
   insns: DisasmInsn[];
 }
 
 export interface SymbolEntry {
   name: string;
-  demangled?: string;        
+  demangled?: string;
   kind: "import" | "export" | "symbol";
-  address?: number;          
+  address?: number;
   size?: number;
-  type?: string;             
-  bind?: string;             
-  section?: string;          
-  library?: string;          
-  ordinal?: number;          
+  type?: string;
+  bind?: string;
+  section?: string;
+  library?: string;
+  ordinal?: number;
 }
 
 export interface YaraStringMatch {
-  id: string;                
-  offset: number;            
-  dataHex: string;           
-  truncated?: boolean;       
+  id: string;
+  offset: number;
+  dataHex: string;
+  truncated?: boolean;
 }
 export interface YaraMatch {
   rule: string;
-  namespace: string;         
+  namespace: string;
   tags?: string[];
   meta?: Record<string, string | number | boolean>;
   strings?: YaraStringMatch[];
 }
 export interface YaraCompileError {
   level: "error" | "warning";
-  line: number;              
+  line: number;
   message: string;
-  unit?: string;             
+  unit?: string;
 }
 
 export interface YaraRuleUnit {
@@ -188,18 +162,9 @@ export interface YaraScanResult {
   ok: boolean;
   errors?: YaraCompileError[];
   matches?: YaraMatch[];
-  timeout?: boolean;         
-  truncated?: boolean;       
-  scanError?: number;        
-}
-
-export interface ModuleLog {
-  module: string;
-  ok: boolean;
-  durationMs: number;
-  note?: string;             
-  error?: string;            
-  detail?: string;           
+  timeout?: boolean;
+  truncated?: boolean;
+  scanError?: number;
 }
 
 export interface ScanResult {
@@ -208,17 +173,15 @@ export interface ScanResult {
   entropy: EntropyPoint[];
   records: ScanRecord[];
   errors: string[];
-  debugLog: DebugLog;        
-  moduleLogs: ModuleLog[];
+  formatClass: string;
   memoryMap: MemoryMap | null;
   strings: StringEntry[];
   archive: ArchiveListing | null;
   structure: StructNode[];
   symbols: SymbolEntry[];
-  extracted: ExtractEntry[]; 
-  mime: string[];            
-  disasmAvailable: boolean;  
-                             
+  extracted: ExtractEntry[];
+  mime: string[];
+  disasmAvailable: boolean;
   durationMs: number;
 }
 
@@ -237,24 +200,24 @@ export type WorkerRequest =
 export interface ExtractArchiveEntryRequest {
   id: number;
   cmd: "extractArchiveEntry";
-  bytes: ArrayBuffer;        
+  bytes: ArrayBuffer;
   entryName: string;
 }
 
 export interface YaraScanRequest {
   id: number;
   cmd: "yaraScan";
-  bytes: ArrayBuffer;        
-  units: YaraRuleUnit[];     
+  bytes: ArrayBuffer;
+  units: YaraRuleUnit[];
 }
 
 export interface DisasmRequest {
   id: number;
   cmd: "disasm";
-  bytes: ArrayBuffer;        
-  address: number;           
-  count: number;             
-  mode?: DisasmMode;         
+  bytes: ArrayBuffer;
+  address: number;
+  count: number;
+  mode?: DisasmMode;
 }
 
 export interface DemangleRequest {
@@ -266,22 +229,22 @@ export interface DemangleRequest {
 export interface InitRequest {
   id: number;
   cmd: "init";
-  signaturesUrl: string;     
-  manifestUrl: string;       
+  signaturesUrl: string;
+  manifestUrl: string;
 }
 
 export interface ScanRequest {
   id: number;
   cmd: "scan";
-  bytes: ArrayBuffer;        
+  bytes: ArrayBuffer;
   options: ScanOptions;
 }
 
 export interface OpenSessionRequest {
   id: number;
   cmd: "openSession";
-  bytes: ArrayBuffer;        
-  optionsJson?: string;      
+  bytes: ArrayBuffer;
+  optionsJson?: string;
 }
 
 export interface InvokeBindingRequest {
@@ -312,6 +275,6 @@ export type WorkerReply =
 
 export interface OpenSessionReply {
   sessionId: number;
-  jsClass: string;           
+  jsClass: string;
   fileInfo: FileInfo;
 }

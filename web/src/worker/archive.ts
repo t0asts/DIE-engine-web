@@ -1,17 +1,15 @@
-
 import type { ArchiveEntry, ArchiveListing } from "./protocol";
 
-const SIG_EOCD   = 0x06054b50; 
-const SIG_EOCD64 = 0x06064b50; 
-const SIG_LOC64  = 0x07064b50; 
-const SIG_CDH    = 0x02014b50; 
-const SIG_LFH    = 0x04034b50; 
+const SIG_EOCD   = 0x06054b50;
+const SIG_EOCD64 = 0x06064b50;
+const SIG_LOC64  = 0x07064b50;
+const SIG_CDH    = 0x02014b50;
+const SIG_LFH    = 0x04034b50;
 
-const MAX_ENTRIES = 20_000;    
-const MAX_EXTRACT_BYTES = 256 * 1024 * 1024;  
+const MAX_ENTRIES = 20_000;
+const MAX_EXTRACT_BYTES = 256 * 1024 * 1024;
 
 export function looksLikeZip(bytes: Uint8Array): boolean {
-  
   return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b &&
     ((bytes[2] === 0x03 && bytes[3] === 0x04) ||
      (bytes[2] === 0x05 && bytes[3] === 0x06) ||
@@ -34,7 +32,7 @@ export function listZipEntries(bytes: Uint8Array, kindHint?: string): ArchiveLis
     : "";
 
   let note: string | undefined;
-  
+
   if (entryCount === 0xffff || cdSize === 0xffffffff || cdOffset === 0xffffffff) {
     const locOff = findSig(bytes, SIG_LOC64, Math.max(0, eocdOff - 20 - 0x100), eocdOff);
     if (locOff >= 0) {
@@ -120,7 +118,6 @@ function findSig(bytes: Uint8Array, sig: number, from: number, to: number): numb
 }
 
 function decodeName(buf: Uint8Array, flags: number): string {
-  
   try {
     return new TextDecoder(flags & 0x800 ? "utf-8" : "utf-8", { fatal: false }).decode(buf);
   } catch {
@@ -202,7 +199,6 @@ export async function extractZipEntry(
     const name = decodeName(bytes.subarray(p + 46, p + 46 + nameLen), flags);
 
     if (name === entryName) {
-      
       if (compSize === 0xffffffff || uncompSize === 0xffffffff || lhOff === 0xffffffff) {
         const ex = bytes.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
         const exdv = new DataView(ex.buffer, ex.byteOffset, ex.byteLength);
@@ -227,7 +223,7 @@ export async function extractZipEntry(
       const lExtraLen = dv.getUint16(lhOff + 28, true);
       const dataStart = lhOff + 30 + lNameLen + lExtraLen;
       if (dataStart + compSize > bytes.length) return { error: "truncated archive" };
-      const comp = bytes.subarray(dataStart, dataStart + compSize).slice();   
+      const comp = bytes.subarray(dataStart, dataStart + compSize).slice();
       if (method === 0) return { data: comp };
       try {
         const ds = new DecompressionStream("deflate-raw");

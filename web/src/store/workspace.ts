@@ -1,4 +1,3 @@
-
 import { create } from "zustand";
 
 import { ScanClient } from "../worker/client";
@@ -7,7 +6,7 @@ import { useSettings, scanOptionsFromSettings } from "./settings";
 import { recordRecentFile } from "./recent";
 
 export interface DroppedFile {
-  id: string;            
+  id: string;
   name: string;
   size: number;
   bytes: ArrayBuffer;

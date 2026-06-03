@@ -1,4 +1,3 @@
-
 import type {
   WorkerRequest,
   WorkerReply,
@@ -23,7 +22,6 @@ import type {
   DisasmResult,
   DisasmMode,
   SymbolEntry,
-  ModuleLog,
   ExtractEntry,
   ExtractArchiveEntryRequest,
 } from "./protocol";
@@ -33,7 +31,7 @@ import { scanStrings } from "./strings";
 import { listZipEntries, looksLikeZip, extractZipEntry } from "./archive";
 
 const ZIP_FAMILY = new Set(["ZIP", "JAR", "APK", "IPA", "NPM"]);
-const ARCHIVE_LIST_MAX_BYTES = 512 * 1024 * 1024;   
+const ARCHIVE_LIST_MAX_BYTES = 512 * 1024 * 1024;
 
 interface EmFS {
   mkdir(path: string): void;
@@ -47,13 +45,13 @@ interface EmModule {
   _malloc(size: number): number;
   _free(ptr: number): void;
   UTF8ToString(ptr: number): string;
-  
+
   [key: string]: unknown;
 }
 
 let mod: EmModule | null = null;
 let dieHandle: number | null = null;
-let sessions = new Map<number, number>();   
+let sessions = new Map<number, number>();
 let nextSessionId = 1;
 
 let manifest: SignaturePackManifest | null = null;
@@ -65,14 +63,13 @@ interface SignaturePackManifest {
 }
 
 async function doInit(req: InitRequest): Promise<void> {
-  
   const factoryUrl: string = "/scan-engine/scan_engine.js";
   const { default: factory } = (await import(/* @vite-ignore */ factoryUrl)) as {
     default: (overrides?: Record<string, unknown>) => Promise<EmModule>;
   };
   mod = await factory();
 
-  try { mod.FS.mkdir("/signatures"); } catch {  }
+  try { mod.FS.mkdir("/signatures"); } catch {}
 
   const manifestRes = await fetch(req.manifestUrl);
   manifest = (await manifestRes.json()) as SignaturePackManifest;
@@ -115,6 +112,15 @@ function getHashes(bytes: Uint8Array): Hashes {
   mod.ccall("die_free_string", null, ["number"], [resPtr]);
   mod._free(ptr);
   return JSON.parse(json) as Hashes;
+}
+
+function getImportHash(sessionPtr: number): Partial<Hashes> {
+  if (!mod) throw new Error("not initialized");
+  const resPtr = mod.ccall("die_get_import_hash", "number", ["number"], [sessionPtr]) as number;
+  if (!resPtr) return {};
+  const json = mod.UTF8ToString(resPtr);
+  mod.ccall("die_free_string", null, ["number"], [resPtr]);
+  return JSON.parse(json) as Partial<Hashes>;
 }
 
 function getMemoryMap(sessionPtr: number): MemoryMap | null {
@@ -181,18 +187,12 @@ function getExtract(sessionPtr: number): ExtractEntry[] {
 }
 
 const DISASM_SUPPORTED_ARCH_RE =
-  /^(?:8086|286|386|80[3-5]86|486|i386|x86|x86_?64|x64|amd64|aarch64|thumb|arm(?:nt|_v[67]s?|_a500|64(?:_32|e)?)?)$/i;
+  /^(?:8086|286|386|80[3-5]86|486|i386|x86|x86_?64|x64|amd64|aarch64|thumb|arm(?:nt|_v[67]s?|_a500|64(?:_32|e)?)?|mips|r3000|r4000|r10000|wcemipsv2|ppc|ppc64|powerpc|powerpc_be|risc_v|riscv32|riscv64)$/i;
 
-function timed<T>(
-  log: ModuleLog[], module: string, fn: () => T, note?: (v: T) => string | undefined,
-): T | null {
-  const t = performance.now();
+function safe<T>(fn: () => T): T | null {
   try {
-    const v = fn();
-    log.push({ module, ok: true, durationMs: Math.round(performance.now() - t), note: note?.(v) });
-    return v;
-  } catch (e) {
-    log.push({ module, ok: false, durationMs: Math.round(performance.now() - t), error: (e as Error).message });
+    return fn();
+  } catch {
     return null;
   }
 }
@@ -231,7 +231,7 @@ function openSession(req: OpenSessionRequest): OpenSessionReply {
   const sessionPtr = mod.ccall("die_open_session", "number",
     ["number", "number", "number", "number"],
     [dieHandle, ptr, bytes.byteLength, optsPtr]) as number;
-  
+
   mod._free(ptr);
   if (optsPtr) mod._free(optsPtr);
   if (!sessionPtr) throw new Error("die_open_session returned null");
@@ -321,73 +321,42 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
   if (!mod || !dieHandle || !manifest) throw new Error("not initialized");
   const t0 = performance.now();
   const bytes = new Uint8Array(req.bytes);
-  const moduleLogs: ModuleLog[] = [];
   const opts = req.options ?? {};
   const stringsMinLen = opts.stringsMinLen && opts.stringsMinLen >= 1 ? opts.stringsMinLen : 4;
-  
+
   const optionsJson = JSON.stringify({
     deepScan: opts.deepScan, heuristicScan: opts.heuristicScan, aggressiveScan: opts.aggressiveScan,
     recursiveScan: opts.recursiveScan, overlayScan: opts.overlayScan, resourcesScan: opts.resourcesScan,
     archivesScan: opts.archivesScan, verbose: opts.verbose,
   });
 
-  const fileInfo =
-    timed(moduleLogs, "Format detection", () => getFileInfo(bytes),
-      (fi) => `${fi.primaryFormat}${fi.allFormats.length > 1 ? ` (+${fi.allFormats.length - 1} more)` : ""}`) ??
+  const fileInfo = safe(() => getFileInfo(bytes)) ??
     { size: bytes.byteLength, primaryFormat: "Unknown", allFormats: [] };
-  const hashes =
-    timed(moduleLogs, "Hashes", () => getHashes(bytes)) ?? { md5: "", sha1: "", sha256: "" };
-  const entropy =
-    timed(moduleLogs, "Entropy", () => getEntropy(bytes, 4096), (e) => `${e.length} windows @4 KiB`) ?? [];
+  const hashes = safe(() => getHashes(bytes)) ?? { md5: "", sha1: "", sha256: "" };
+  const entropy = safe(() => getEntropy(bytes, 4096)) ?? [];
 
   const sessionReply = openSession({ id: -1, cmd: "openSession", bytes: req.bytes, optionsJson });
-  moduleLogs.push({ module: "Format parse", ok: true, durationMs: 0, note: `binding class: ${sessionReply.jsClass}` });
   const sessionPtr = sessions.get(sessionReply.sessionId)!;
 
-  const memoryMap = timed(moduleLogs, "Memory map", () => getMemoryMap(sessionPtr),
-    (m) => m ? `${m.records.length} regions · ${m.arch} ${m.mode} · EP 0x${m.entryPoint.toString(16)}`
-             : "(not available for this format)");
-  const structure = timed(moduleLogs, "Structure", () => getFormatStruct(sessionPtr),
-    (st) => `${st.length} group(s)`) ?? [];
-  const symRes = timed(moduleLogs, "Symbols", () => getSymbols(sessionPtr),
-    (r) => `${r.symbols.length} symbol(s)${r.truncated ? " - truncated" : ""}`);
-  const symbols = symRes?.symbols ?? [];
-  const mime = timed(moduleLogs, "MIME", () => getMime(bytes), (m) => m.join(", ") || "(none)") ?? [];
-  const extracted = timed(moduleLogs, "Extractor", () => getExtract(sessionPtr),
-    (x) => `${x.length} embedded/overlay sub-file(s)`) ?? [];
+  const memoryMap = safe(() => getMemoryMap(sessionPtr));
+  const structure = safe(() => getFormatStruct(sessionPtr)) ?? [];
+  const symbols = safe(() => getSymbols(sessionPtr))?.symbols ?? [];
+  const mime = safe(() => getMime(bytes)) ?? [];
+  const extracted = safe(() => getExtract(sessionPtr)) ?? [];
+
+  const importHash = safe(() => getImportHash(sessionPtr)) ?? {};
+  const hashesFull: Hashes = { ...hashes, ...importHash };
 
   const disasmAvailable = !!memoryMap && DISASM_SUPPORTED_ARCH_RE.test(memoryMap.arch);
-  
-  if (disasmAvailable && memoryMap) {
-    timed(moduleLogs, "Disassembly", () => disasmRange(sessionPtr, memoryMap.entryPoint, 8, "auto"),
-      (d) => {
-        const first = d.insns[0];
-        const at = first ? ` @ 0x${first.address.toString(16)}` : "";
-        return first
-          ? `probe${at} (${d.mode}): ${d.insns.length} insn(s) - ${first.mnemonic}${first.operands ? " " + first.operands : ""} …`
-          : `probe returned 0 instructions (${d.mode})`;
-      });
-  } else {
-    moduleLogs.push({ module: "Disassembly", ok: true, durationMs: 0,
-      note: memoryMap ? `arch ${memoryMap.arch || "?"}: not one of the linked Capstone backends (x86/x86-64, ARM, AArch64)`
-                      : "no memory map" });
-  }
 
-  const strings = timed(moduleLogs, "Strings", () => scanStrings(bytes, { minLen: stringsMinLen, maxResults: 50_000 }),
-    (s) => `${s.length} string(s) ≥${stringsMinLen} chars`) ?? [];
+  const strings = safe(() => scanStrings(bytes, { minLen: stringsMinLen, maxResults: 50_000 })) ?? [];
 
   let archive: ArchiveListing | null = null;
-  if (!looksLikeZip(bytes)) {
-    moduleLogs.push({ module: "Archive", ok: true, durationMs: 0, note: "not a ZIP-family file" });
-  } else if (bytes.byteLength > ARCHIVE_LIST_MAX_BYTES) {
-    moduleLogs.push({ module: "Archive", ok: true, durationMs: 0, note: "ZIP-family but too large - listing skipped" });
-  } else {
-    archive = timed(moduleLogs, "Archive",
-      () => listZipEntries(bytes, ZIP_FAMILY.has(sessionReply.jsClass) ? sessionReply.jsClass : "ZIP-family"),
-      (a) => a ? `${a.totalEntries} entr${a.totalEntries === 1 ? "y" : "ies"} (${a.kind})` : "(central directory not found)");
+  if (looksLikeZip(bytes) && bytes.byteLength <= ARCHIVE_LIST_MAX_BYTES) {
+    archive = safe(() =>
+      listZipEntries(bytes, ZIP_FAMILY.has(sessionReply.jsClass) ? sessionReply.jsClass : "ZIP-family"));
   }
 
-  const sigT = performance.now();
   let sigResult;
   try {
     sigResult = await runScan({
@@ -402,38 +371,19 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
       manifest,
     });
   } catch (e) {
-    moduleLogs.push({ module: "Signatures", ok: false, durationMs: Math.round(performance.now() - sigT), error: (e as Error).message });
     closeSession({ id: -1, cmd: "closeSession", sessionId: sessionReply.sessionId });
     throw e;
   }
-  moduleLogs.push({
-    module: "Signatures",
-    ok: sigResult.scriptsFailed === 0,
-    durationMs: Math.round(performance.now() - sigT),
-    note: `${sigResult.scriptsSucceeded}/${sigResult.scriptsAttempted} scripts ok · ${sigResult.records.length} detection(s)` +
-          (sigResult.scriptsFailed ? ` · ${sigResult.scriptsFailed} failed` : ""),
-    detail: sigResult.scriptsFailed
-      ? sigResult.scriptOutcomes.filter((o) => !o.ok).slice(0, 50).map((o) => `${o.path}: ${o.error ?? "?"}`).join("\n")
-      : undefined,
-  });
 
   closeSession({ id: -1, cmd: "closeSession", sessionId: sessionReply.sessionId });
 
   return {
     fileInfo,
-    hashes,
+    hashes: hashesFull,
     entropy,
     records: sigResult.records,
     errors: sigResult.errors,
-    debugLog: {
-      fileSize: bytes.byteLength,
-      jsClass: sessionReply.jsClass,
-      scriptsAttempted: sigResult.scriptsAttempted,
-      scriptsSucceeded: sigResult.scriptsSucceeded,
-      scriptsFailed: sigResult.scriptsFailed,
-      scriptOutcomes: sigResult.scriptOutcomes,
-    },
-    moduleLogs,
+    formatClass: sessionReply.jsClass,
     memoryMap,
     strings,
     archive,
@@ -449,7 +399,7 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
 async function doExtractArchiveEntry(req: ExtractArchiveEntryRequest): Promise<ArrayBuffer> {
   const r = await extractZipEntry(new Uint8Array(req.bytes), req.entryName);
   if ("error" in r) throw new Error(r.error);
-  
+
   return r.data.buffer;
 }
 
@@ -530,7 +480,7 @@ self.addEventListener("message", async (ev: MessageEvent<WorkerRequest>) => {
         break;
       case "extractArchiveEntry": {
         const buf = await doExtractArchiveEntry(req);
-        reply({ id: req.id, ok: true, result: buf }, [buf]);   
+        reply({ id: req.id, ok: true, result: buf }, [buf]);
         break;
       }
     }

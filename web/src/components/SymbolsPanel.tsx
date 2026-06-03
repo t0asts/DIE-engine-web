@@ -1,10 +1,10 @@
-
 import { useMemo, useState } from "react";
 
 import type { SymbolEntry } from "../worker/protocol";
 
 interface Props {
   symbols: SymbolEntry[];
+  onDecompile?: (addr: number) => void;
 }
 
 type SortKey = "name" | "address" | "kind";
@@ -18,7 +18,7 @@ const KIND_STYLE: Record<SymbolEntry["kind"], string> = {
   symbol: "text-zinc-400",
 };
 
-export function SymbolsPanel({ symbols }: Props) {
+export function SymbolsPanel({ symbols, onDecompile }: Props) {
   const [filter, setFilter] = useState("");
   const [kind, setKind] = useState<KindFilter>("all");
   const [sortKey, setSortKey] = useState<SortKey>("name");
@@ -120,7 +120,22 @@ export function SymbolsPanel({ symbols }: Props) {
                 </td>
                 <td className="px-3 py-1 text-zinc-500 truncate" title={s.library ?? ""}>{s.library ?? ""}</td>
                 <td className="px-3 py-1 text-zinc-500">
-                  {s.address !== undefined ? hex(s.address) : ""}
+                  {s.address !== undefined ? (
+                    onDecompile && s.kind !== "import" ? (
+                      <button
+                        type="button"
+                        onClick={() => onDecompile(s.address!)}
+                        className="text-sky-400 hover:underline"
+                        title="Decompile this function"
+                      >
+                        {hex(s.address)}
+                      </button>
+                    ) : (
+                      hex(s.address)
+                    )
+                  ) : (
+                    ""
+                  )}
                   {s.section ? <span className="text-zinc-600"> [{s.section}]</span> : null}
                 </td>
                 <td className="px-3 py-1 text-zinc-500">

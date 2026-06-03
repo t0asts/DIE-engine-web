@@ -10,4 +10,4 @@ Detect It Easy but in your browser.
 
 ## Credits
 
-Credit to [Hors](https://github.com/horsicq) for the [Detect It Easy](https://github.com/horsicq/DIE-engine) project.
+Credit to [Hors](https://github.com/horsicq) for the [Detect It Easy](https://github.com/horsicq/DIE-engine) project, and to the [NSA](https://github.com/NationalSecurityAgency) for [Ghidra](https://github.com/NationalSecurityAgency/ghidra).

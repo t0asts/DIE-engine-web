@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWorkspace } from "../store/workspace";
@@ -6,11 +5,12 @@ import type { DisasmInsn, DisasmMode } from "../worker/protocol";
 
 interface Props {
   bytes: ArrayBuffer;
-  entryPoint: number;        
-  arch: string;              
+  entryPoint: number;
+  arch: string;
+  onDecompile?: (addr: number) => void;
 }
 
-const PAGE = 2000;           
+const PAGE = 2000;
 
 const ARM32_ARCH_RE = /^(?:arm(?:nt|_v[67]s?|_a500)?|thumb)$/i;
 
@@ -23,12 +23,11 @@ const MODE_OPTIONS: { id: DisasmMode; label: string }[] = [
 
 const hex = (n: number) => "0x" + Math.max(0, Math.trunc(n)).toString(16);
 function padHexBytes(s: string, width = 8): string {
-  
   const pairs = s.match(/../g) ?? [];
   return pairs.join(" ").padEnd(width * 3 - 1, " ");
 }
 
-export function DisasmView({ bytes, entryPoint, arch }: Props) {
+export function DisasmView({ bytes, entryPoint, arch, onDecompile }: Props) {
   const client = useWorkspace((s) => s.client);
   const isArm32 = ARM32_ARCH_RE.test(arch);
   const hasEP = Number.isFinite(entryPoint) && entryPoint > 0;
@@ -38,7 +37,7 @@ export function DisasmView({ bytes, entryPoint, arch }: Props) {
   const [insns, setInsns] = useState<DisasmInsn[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [atEnd, setAtEnd] = useState(false);          
+  const [atEnd, setAtEnd] = useState(false);
   const [gotoStr, setGotoStr] = useState("");
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -57,10 +56,9 @@ export function DisasmView({ bytes, entryPoint, arch }: Props) {
         setResolvedMode(got.mode);
         if (append) {
           setInsns((prev) => {
-            
             const seen = new Set(prev.map((i) => i.address));
             const fresh = got.insns.filter((i) => !seen.has(i.address));
-            if (fresh.length === 0) setAtEnd(true);     
+            if (fresh.length === 0) setAtEnd(true);
             return prev.concat(fresh);
           });
         } else {
@@ -93,7 +91,7 @@ export function DisasmView({ bytes, entryPoint, arch }: Props) {
   const onGoto = () => {
     const s = gotoStr.trim().replace(/^0x/i, "");
     if (!s) return;
-    const v = parseInt(s, 16);   
+    const v = parseInt(s, 16);
     if (Number.isFinite(v)) jumpTo(v);
   };
 
@@ -112,7 +110,7 @@ export function DisasmView({ bytes, entryPoint, arch }: Props) {
             onClick={() => (base === entryPoint ? void load(entryPoint, false) : setBase(entryPoint))}
             className="px-2 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700"
           >
-            ↦ Entry point ({hex(entryPoint)})
+            → Entry point ({hex(entryPoint)})
           </button>
         ) : null}
         <input
@@ -144,6 +142,16 @@ export function DisasmView({ bytes, entryPoint, arch }: Props) {
             ))}
             {resolvedMode ? <span className="text-xs text-zinc-500 ml-1">→ {resolvedMode}</span> : null}
           </span>
+        ) : null}
+        {onDecompile ? (
+          <button
+            type="button"
+            onClick={() => onDecompile(insns[0]?.address ?? base)}
+            className="px-2 py-1 text-xs rounded bg-zinc-800 hover:bg-zinc-700"
+            title="Decompile the function at the current address"
+          >
+            Decompile
+          </button>
         ) : null}
         <span className="text-xs text-zinc-500">
           {status === "loading" ? "decoding…" : `${insns.length} insns from ${hex(insns[0]?.address ?? base)}`}

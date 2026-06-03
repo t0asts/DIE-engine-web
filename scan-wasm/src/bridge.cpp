@@ -1,4 +1,3 @@
-
 #include <emscripten.h>
 
 #include <QAbstractItemModel>
@@ -224,7 +223,7 @@ void appendMachStruct(XMACH* mach, QJsonArray& top) {
     top.append(jGroup(QStringLiteral("Load commands"), QString::number(cmds.size()), ch));
 }
 
-}  
+}
 
 extern "C" char* die_dispatch_invoke(die_web::Session* session, int methodId,
                                      const char* argsJson);
@@ -259,7 +258,7 @@ void* die_open_session(void* handle, const uint8_t* bytes, size_t size, const ch
     auto* h = asHandle(handle);
     if (!h || !bytes || size == 0) return nullptr;
     auto session = std::make_unique<die_web::Session>();
-    if (!session->open(bytes, size, optionsJson)) return nullptr;   
+    if (!session->open(bytes, size, optionsJson)) return nullptr;
     return session.release();
 }
 
@@ -318,25 +317,28 @@ char* die_get_memory_map(void* session) {
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+}
 
 #include "xcppfilt.h"
+#include "xdemangle.h"
+
+namespace {
+QString dieDemangleAuto(const QString& in) {
+    if (in.isEmpty()) return QString();
+    static XDemangle dem;
+    const QString d = dem.demangle(in, XDemangle::MODE_AUTO);
+    if (d.isEmpty() || d == in) return QString();
+    return d;
+}
+}
 
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
 char* die_demangle(const char* name) {
     if (!name || !*name) return nullptr;
-    QString in = QString::fromUtf8(name);
-
-    QString d;
-    d = XCppfilt::demangleGnuV3(in);     if (!d.isEmpty() && d != in) goto done;
-    d = XCppfilt::demangleRust(in);      if (!d.isEmpty() && d != in) goto done;
-    d = XCppfilt::demangleDLANG(in);     if (!d.isEmpty() && d != in) goto done;
-    d = XCppfilt::demangleJavaV3(in);    if (!d.isEmpty() && d != in) goto done;
-    d = XCppfilt::demangleGNAT(in);      if (!d.isEmpty() && d != in) goto done;
-    return nullptr;
-done:
+    const QString d = dieDemangleAuto(QString::fromUtf8(name));
+    if (d.isEmpty()) return nullptr;
     return dupCString(d.toUtf8());
 }
 
@@ -570,12 +572,12 @@ char* die_get_format_struct(void* session) {
         XFileInfo::OPTIONS opts;
         opts.fileType = ft;
         opts.bComment = true;
-        opts.sString  = method;  
+        opts.sString  = method;
 
         XBinary::PDSTRUCT pd = XBinary::createPdStruct();
         XFileInfo fi;
         fi.setData(dev, &model, opts, &pd);
-        
+
         static_cast<XThreadObject*>(&fi)->process();
 
         const int rows = model.rowCount(QModelIndex());
@@ -619,9 +621,9 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
         if (mode == 1)      {  }
         else if (mode == 2) wantThumb = true;
         else if (mode == 3) { wantThumb = true; wantCortexM = true; }
-        else {  
+        else {
             const QString arch = mm.sArch.toUpper();
-            
+
             if (s->jsClass() == "PE" && (arch == QLatin1String("ARMNT") || arch == QLatin1String("THUMB")))
                 wantThumb = true;
             else if (startWasOdd || (mm.nEntryPointAddress & XADDR(1)))
@@ -645,6 +647,17 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
             case XBinary::DM_CORTEXM:    return "cortex-m";
             case XBinary::DM_AARCH64_LE: return "aarch64";
             case XBinary::DM_AARCH64_BE: return "aarch64-be";
+            case XBinary::DM_MIPS_LE:    return "mips";
+            case XBinary::DM_MIPS_BE:    return "mips-be";
+            case XBinary::DM_MIPS64_LE:  return "mips64";
+            case XBinary::DM_MIPS64_BE:  return "mips64-be";
+            case XBinary::DM_PPC_LE:     return "ppc";
+            case XBinary::DM_PPC_BE:     return "ppc-be";
+            case XBinary::DM_PPC64_LE:   return "ppc64";
+            case XBinary::DM_PPC64_BE:   return "ppc64-be";
+            case XBinary::DM_RISKV32:    return "riscv32";
+            case XBinary::DM_RISKV64:    return "riscv64";
+            case XBinary::DM_RISKVC:     return "riscv-c";
             default:                     return "unknown";
         }
     };
@@ -664,7 +677,7 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
 
     QJsonArray out;
     XADDR addr = static_cast<XADDR>(startAddress);
-    
+
     if (armFamily) addr &= ~XADDR(1);
     const XADDR epAddr = armFamily ? (mm.nEntryPointAddress & ~XADDR(1)) : mm.nEntryPointAddress;
 
@@ -679,7 +692,6 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
             auto* elf = static_cast<XELF*>(bin);
             const QList<XELF_DEF::Elf_Phdr> phdrs = elf->getElf_PhdrList(1000);
             for (const auto& ph : phdrs) {
-                
                 if (ph.p_type == XELF_DEF::S_PT_LOAD && (ph.p_flags & 0x1) &&
                     ph.p_filesz > 0 && mapsToFile(ph.p_vaddr)) {
                     resolved = ph.p_vaddr;
@@ -698,12 +710,12 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
             }
         }
         if (found) addr = resolved;
-        
+
     }
 
     for (int i = 0; i < count; ++i) {
         const qint64 off = XBinary::addressToOffset(&mm, addr);
-        if (off < 0 || off >= fileSize) break;   
+        if (off < 0 || off >= fileSize) break;
 
         const XDisasmAbstract::DISASM_RESULT r = core.disAsm(dev, off, addr, dopts);
         QJsonObject ins;
@@ -717,10 +729,9 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
                 ins["branch"] = static_cast<double>(r.nXrefToRelative);
             }
             out.append(ins);
-            
+
             addr = (r.nNextAddress > addr) ? r.nNextAddress : (addr + static_cast<XADDR>(r.nSize));
         } else {
-            
             const QByteArray ba = bin->read_array(off, 1);
             const quint8 b = ba.isEmpty() ? 0 : static_cast<quint8>(ba.at(0));
             ins["size"]     = 1;
@@ -738,21 +749,18 @@ char* die_disasm_range(void* session, double startAddress, int count, int mode) 
     return dupCString(QJsonDocument(result).toJson(QJsonDocument::Compact));
 }
 
-}  
+}
 
 namespace {
 
 QString demangleIfMangled(const QString& name) {
     if (name.isEmpty()) return QString();
+
     if (!(name.startsWith("_Z") || name.startsWith("__Z") || name.startsWith("_R") ||
           name.startsWith("?") || name.startsWith("@_Z"))) {
         return QString();
     }
-    QString d;
-    d = XCppfilt::demangleGnuV3(name);  if (!d.isEmpty() && d != name) return d;
-    d = XCppfilt::demangleRust(name);   if (!d.isEmpty() && d != name) return d;
-    d = XCppfilt::demangleDLANG(name);  if (!d.isEmpty() && d != name) return d;
-    return QString();
+    return dieDemangleAuto(name);
 }
 
 void addSymbol(QJsonArray& arr, const QString& name, const char* kind,
@@ -799,7 +807,7 @@ const char* elfSymBind(quint8 stInfo) {
     }
 }
 
-}  
+}
 
 extern "C" {
 
@@ -817,14 +825,14 @@ char* die_get_symbols(void* session) {
     if (cls == "PE") {
         XPE* pe = static_cast<XPE*>(bin);
         XBinary::PDSTRUCT pd = XBinary::createPdStruct();
-        
+
         const QList<XPE::IMPORT_RECORD> imps = pe->getImportRecords(&pd);
         for (const auto& ir : imps) {
             if (!room()) break;
             addSymbol(syms, ir.sFunction.isEmpty() ? QStringLiteral("(by ordinal)") : ir.sFunction,
                       "import", ir.nRVA >= 0 ? ir.nRVA : -1, -1, QString(), QString(), QString(), ir.sLibrary);
         }
-        
+
         const XPE::EXPORT_HEADER ex = pe->getExport(false, &pd);
         for (const auto& ep : ex.listPositions) {
             if (!room()) break;
@@ -847,7 +855,7 @@ char* die_get_symbols(void* session) {
                 if (!room()) break;
                 QString name = elf->getStringFromSection(es.st_name, link);
                 if (name.isEmpty() && (es.st_info & 0xF) == 4 ) name = QStringLiteral("(file)");
-                if (name.isEmpty()) continue;   
+                if (name.isEmpty()) continue;
                 const char* kind = (es.st_shndx == 0) ? "import"
                                  : ((es.st_info >> 4) == 1 || (es.st_info >> 4) == 2) ? "export"
                                  : "symbol";
@@ -867,7 +875,7 @@ char* die_get_symbols(void* session) {
         XBinary::_MEMORY_MAP mm = bin->getMemoryMap();
         const bool be = (mm.endian == XBinary::ENDIAN_BIG);
         QList<XMACH::COMMAND_RECORD> cmds = mach->getCommandRecords();
-        
+
         qint64 strOff = -1;
         QList<XMACH::COMMAND_RECORD> symtabCmds = XMACH::getCommandRecords(0x2, &cmds);
         if (!symtabCmds.isEmpty()) {
@@ -884,8 +892,8 @@ char* die_get_symbols(void* session) {
             QString name;
             if (strOff >= 0 && strx) name = bin->read_ansiString(strOff + strx, 1024);
             if (name.isEmpty()) continue;
-            const bool ext   = (ntype & 0x01) != 0;            
-            const quint8 typ = ntype & 0x0e;                   
+            const bool ext   = (ntype & 0x01) != 0;
+            const quint8 typ = ntype & 0x0e;
             const char* kind = (typ == 0x00 ) ? "import"
                              : (ext ? "export" : "symbol");
             addSymbol(syms, name, kind,
@@ -901,7 +909,26 @@ char* die_get_symbols(void* session) {
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+EMSCRIPTEN_KEEPALIVE
+char* die_get_import_hash(void* session) {
+    auto* s = asSession(session);
+    if (!s || !s->binary()) return nullptr;
+    QJsonObject out;
+    if (s->jsClass() == "PE") {
+        XPE* pe = static_cast<XPE*>(s->binary());
+        if (pe->isImportPresent()) {
+            XBinary::PDSTRUCT pd = XBinary::createPdStruct();
+            QList<XPE::IMPORT_RECORD> imps = pe->getImportRecords(&pd);
+            const quint32 h32 = pe->getImportHash32(&imps, &pd);
+            const quint64 h64 = pe->getImportHash64(&imps, &pd);
+            out["importHash32"] = QStringLiteral("0x") + QString::number(h32, 16).rightJustified(8, QLatin1Char('0'));
+            out["importHash64"] = QStringLiteral("0x") + QString::number(h64, 16).rightJustified(16, QLatin1Char('0'));
+        }
+    }
+    return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
+}
+
+}
 
 extern "C" {
 #include "yara.h"
@@ -991,7 +1018,7 @@ char* yaraErrJson(const QString& msg) {
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+}
 
 extern "C" {
 
@@ -1051,14 +1078,14 @@ char* die_yara_scan(const uint8_t* bytes, size_t size, const char* unitsJson) {
 
     out["ok"]      = true;
     out["matches"] = sctx.matches;
-    if (!cctx.errors.isEmpty()) out["errors"] = cctx.errors;   
+    if (!cctx.errors.isEmpty()) out["errors"] = cctx.errors;
     if (sr == ERROR_SCAN_TIMEOUT) out["timeout"] = true;
     else if (sr == ERROR_TOO_MANY_MATCHES) out["truncated"] = true;
     else if (sr != ERROR_SUCCESS) out["scanError"] = sr;
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+}
 
 #include "xmime.h"
 
@@ -1075,7 +1102,7 @@ char* die_get_mime(const uint8_t* bytes, size_t size) {
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+}
 
 #include "xextractor.h"
 
@@ -1091,7 +1118,7 @@ char* die_extract(void* session) {
     XExtractor::OPTIONS opts = XExtractor::getDefaultOptions();
     opts.fileType = s->binary()->getFileType();
     opts.emode    = XExtractor::EMODE_FORMAT;
-    opts.bAllTypes = false;   
+    opts.bAllTypes = false;
 
     XBinary::PDSTRUCT pd = XBinary::createPdStruct();
     const QVector<XExtractor::RECORD> recs = XExtractor::scanDevice(dev, opts, &pd);
@@ -1110,4 +1137,4 @@ char* die_extract(void* session) {
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
 }
 
-}  
+}

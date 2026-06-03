@@ -1,4 +1,3 @@
-
 import { useState } from "react";
 
 import type { ScanResult } from "../worker/protocol";

@@ -3,6 +3,10 @@ misc/
 /scan-wasm/build/
 /scan-wasm/build-*/
 /signatures-pack/dist/
+/decompile-wasm/dist/
+/decompile-wasm/build/
+/specs/dist/
+/specs/build/
 /web/dist/
 /web/node_modules/
 /web/.vite/

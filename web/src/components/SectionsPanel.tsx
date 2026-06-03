@@ -1,4 +1,3 @@
-
 import type { MemoryMap } from "../worker/protocol";
 import { RegionMap } from "./RegionMap";
 

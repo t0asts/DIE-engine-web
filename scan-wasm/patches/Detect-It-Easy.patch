@@ -1,5 +1,57 @@
+diff --git a/db/Binary/ROM_1.sg b/db/Binary/ROM_1.sg
+index a4297733..80fad931 100755
+--- a/db/Binary/ROM_1.sg
++++ b/db/Binary/ROM_1.sg
+@@ -1327,7 +1327,7 @@ function detect() {
+         // & https://worldofspectrum.org/faq/reference/z80format.htm
+         // basic header len = 30, v2ext = 23, v3ext = 54, xzxext = 55
+         if (!extIs('z80') && !extIs('slt')) return false; if (X.Sz() < 1380) return false;
+-        nv = 0; co = true; joystick = hw = ''; const xhdr = 32, b12 = X.U8(12); if (b12 == 0xFF) b12 = 1;
++        nv = 0; co = true; joystick = hw = ''; const xhdr = 32; let b12 = X.U8(12); if (b12 == 0xFF) b12 = 1;
+         var pc = X.U16(6), srx = X.U8(37) & 0x80, hdrsz = 0x1E;
+         if (!pc) { //PC register 0 means v2+
+             switch (xblk = X.U16(30)) { case 23: nv = 2; break; case 54: case 55: nv = 3; break; default: return false }
+diff --git a/db/Binary/bin.IDA.1.sg b/db/Binary/bin.IDA.1.sg
+index fee23289..6d351f0a 100755
+--- a/db/Binary/bin.IDA.1.sg
++++ b/db/Binary/bin.IDA.1.sg
+@@ -30,7 +30,7 @@ function detect() {
+             sName = "IDA FLIRT Signature Database (.SIG)";
+             bDetected = true;
+ 
+-            const
++            let
+                 nVer = Binary.read_uint8(0x06),
+                 nModules = Binary.read_uint16(0x12),
+                 nFlags = Binary.read_uint8(0x10),
+diff --git a/db/Binary/format_bin.Nintendo-certified-file.1.sg b/db/Binary/format_bin.Nintendo-certified-file.1.sg
+index 5e3784f7..e54c32c5 100644
+--- a/db/Binary/format_bin.Nintendo-certified-file.1.sg
++++ b/db/Binary/format_bin.Nintendo-certified-file.1.sg
+@@ -7,7 +7,7 @@ meta("format", "Unknown Certified File");
+ 
+ function detect() {
+     if (X.c("'SCE'00")) {
+-        var tp, e;
++        var e;
+         if (X.c('0000 0002', 4)) e = _BE; //PS3
+         else if (X.c('0300 0000', 4)) e = _LE; //Vita
+         else return;
+diff --git a/db/PE/_Microsoft.6.sg b/db/PE/_Microsoft.6.sg
+index 3e3f4dd4..7018f9af 100644
+--- a/db/PE/_Microsoft.6.sg
++++ b/db/PE/_Microsoft.6.sg
+@@ -56,7 +56,7 @@ function detect() {
+     }
+ 
+     function getNetConfigStringByOffset(configOffset) {
+-        var result = PE.getString(configOffset).split("=")[1];
++        var result = PE.getString(configOffset).split("=")[1] || String();
+ 
+         if (result && result[0] !== 'v' && result.length > 7)
+             result = String();
 diff --git a/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg b/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
-index 70378be..94c6bfd 100755
+index 70378be9..9dcdcb33 100755
 --- a/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
 +++ b/db/PE/__GenericHeuristicAnalysis_By_DosX.7.sg
 @@ -73,8 +73,11 @@
@@ -15,3 +67,12 @@ index 70378be..94c6bfd 100755
      logType = {
          warning: -2, // Service warnings
          about: -1,   // Information about a module
+@@ -1033,7 +1036,7 @@ function scanForObfuscations_NET() {
+ 
+     var runtimeFound = String();
+ 
+-    const protectionsRuntime = [ // Need more
++    var protectionsRuntime = [ // Need more
+         { lib: "haspdnert.dll", name: "SafeNet Sentinel LDK" },
+         { lib: "AgileDotNet.VMRuntime.dll", name: "Agile" },
+         { lib: "Xerin.Runtime.dll", name: "XerinFuscator" },

@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 
 import { useWorkspace } from "../store/workspace";
+import { archForDecompile } from "../decompiler/arch-map";
+import { symbolAddrBase } from "../decompiler/regions";
 
 import { FileInfoPanel } from "./FileInfoPanel";
 import { HashPanel } from "./HashPanel";
 import { EntropyGraph } from "./EntropyGraph";
-import { DebugPanel } from "./DebugPanel";
 import { Tabs, type TabDef } from "./Tabs";
 import { StringsPanel } from "./StringsPanel";
 import { SectionsPanel } from "./SectionsPanel";
@@ -22,10 +23,20 @@ import { DataConverterPanel } from "./DataConverterPanel";
 import { DemanglerPanel } from "./DemanglerPanel";
 import { ExportButton } from "./ExportButton";
 
+const DecompilerPanel = lazy(() =>
+  import("./DecompilerPanel").then((m) => ({ default: m.DecompilerPanel })),
+);
+
 export function ScanResultPanel({ fileId }: { fileId: string }) {
   const file = useWorkspace((s) => s.files.find((f) => f.id === fileId));
   const entry = useWorkspace((s) => s.scans.get(fileId));
   const [activeTab, setActiveTab] = useState("detection");
+  const [decompileTarget, setDecompileTarget] = useState<{ addr: number; nonce: number } | null>(null);
+
+  const navToDecompile = useCallback((addr: number) => {
+    setDecompileTarget((prev) => ({ addr, nonce: (prev?.nonce ?? 0) + 1 }));
+    setActiveTab("decompile");
+  }, []);
 
   if (!file) return null;
 
@@ -52,9 +63,11 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
   const structCount = r.structure?.length ?? 0;
   const symbolCount = r.symbols?.length ?? 0;
   const entryPoint = r.memoryMap?.entryPoint ?? 0;
-  
+
   const canDisasm = r.disasmAvailable;
-  const isPE = r.debugLog?.jsClass === "PE";
+  const decompArch = archForDecompile(r);
+  const symBase = symbolAddrBase(r);
+  const isPE = r.formatClass === "PE";
   const extractedCount = r.extracted?.length ?? 0;
 
   const tabs: TabDef[] = [
@@ -63,6 +76,7 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
     ...(structCount ? [{ id: "structure", label: "Structure" } as TabDef] : []),
     ...(symbolCount ? [{ id: "symbols", label: "Symbols", badge: symbolCount } as TabDef] : []),
     ...(canDisasm ? [{ id: "disasm", label: "Disasm" } as TabDef] : []),
+    ...(decompArch ? [{ id: "decompile", label: "Decompile" } as TabDef] : []),
     ...(isPE ? [{ id: "peid", label: "PEiD" } as TabDef] : []),
     { id: "yara",      label: "YARA" },
     ...(r.archive
@@ -74,9 +88,8 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
     { id: "visualize", label: "Visualize" },
     { id: "convert",   label: "Convert" },
     { id: "demangle",  label: "Demangler" },
-    { id: "debug",     label: "Debug" },
   ];
-  
+
   const tab = tabs.some((t) => t.id === activeTab) ? activeTab : "detection";
 
   return (
@@ -95,8 +108,13 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
         {tab === "detection" ? <DetectionTab fileName={file.name} result={r} /> : null}
         {tab === "sections"  ? <SectionsPanel memoryMap={r.memoryMap} /> : null}
         {tab === "structure" ? <StructPanel structure={r.structure ?? []} /> : null}
-        {tab === "symbols"   ? <SymbolsPanel symbols={r.symbols ?? []} /> : null}
-        {tab === "disasm"    ? <DisasmView bytes={file.bytes} entryPoint={entryPoint} arch={r.memoryMap?.arch ?? ""} /> : null}
+        {tab === "symbols"   ? <SymbolsPanel symbols={r.symbols ?? []} onDecompile={decompArch ? (addr) => navToDecompile(addr + symBase) : undefined} /> : null}
+        {tab === "disasm"    ? <DisasmView bytes={file.bytes} entryPoint={entryPoint} arch={r.memoryMap?.arch ?? ""} onDecompile={decompArch ? navToDecompile : undefined} /> : null}
+        {tab === "decompile" && decompArch ? (
+          <Suspense fallback={<div className="p-8 text-zinc-500">Loading decompiler...</div>}>
+            <DecompilerPanel result={r} bytes={file.bytes} arch={decompArch} target={decompileTarget} />
+          </Suspense>
+        ) : null}
         {tab === "peid"      ? <PeidPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
         {tab === "yara"      ? <YaraPanel bytes={file.bytes} /> : null}
         {tab === "archive" && r.archive ? <ArchivePanel archive={r.archive} bytes={file.bytes} parentName={file.name} /> : null}
@@ -106,7 +124,6 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
         {tab === "visualize" ? <VisualizationPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
         {tab === "convert"   ? <DataConverterPanel /> : null}
         {tab === "demangle"  ? <DemanglerPanel /> : null}
-        {tab === "debug"     ? <DebugPanel fileName={file.name} result={r} /> : null}
       </div>
     </div>
   );

@@ -20,7 +20,6 @@ fi
 ( cd "$HERE/shim-gen" && [[ -d node_modules ]] || npm install --silent )
 ( cd "$HERE/shim-gen" && npm run build --silent )
 
-echo "==> [2/4] Configuring (emcmake)"
 mkdir -p "$BUILD"
 
 QT_WASM_PREFIX="${QT_WASM_PREFIX:-/opt/qt-wasm}"

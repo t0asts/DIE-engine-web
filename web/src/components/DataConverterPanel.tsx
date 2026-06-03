@@ -1,4 +1,3 @@
-
 import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
@@ -14,7 +13,7 @@ function parseIntFlexible(s: string): bigint | null {
     else if (/^0b[01]+$/i.test(t)) v = BigInt(t);
     else if (/^0o[0-7]+$/i.test(t)) v = BigInt(t);
     else if (/^[0-9]+$/.test(t)) v = BigInt(t);
-    else if (/^[0-9a-f]+$/i.test(t)) v = BigInt("0x" + t);   
+    else if (/^[0-9a-f]+$/i.test(t)) v = BigInt("0x" + t);
     else return null;
     return neg ? -v : v;
   } catch { return null; }

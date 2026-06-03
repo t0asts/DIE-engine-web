@@ -1,11 +1,10 @@
-
 #pragma once
 
 #include <QByteArray>
 #include <memory>
 #include <vector>
 
-#include "binary_script.h"   
+#include "binary_script.h"
 
 class WebFileDevice;
 
@@ -24,14 +23,14 @@ public:
     const std::string& jsClass() const { return m_jsClass; }
 
 private:
-    std::vector<uint8_t> m_bytesOwned;       
+    std::vector<uint8_t> m_bytesOwned;
     std::unique_ptr<WebFileDevice> m_device;
     std::unique_ptr<XBinary>       m_binary;
     std::unique_ptr<Binary_Script> m_script;
     std::string                    m_jsClass;
-    
+
     Binary_Script::OPTIONS         m_options{};
     XBinary::PDSTRUCT              m_pd{};
 };
 
-}  
+}
