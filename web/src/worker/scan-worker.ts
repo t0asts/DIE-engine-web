@@ -84,10 +84,20 @@ async function doInit(req: InitRequest): Promise<void> {
   mod._free(pathPtr);
 }
 
-async function fetchSignatureFile(relPath: string): Promise<string> {
-  const res = await fetch(signaturesBaseUrl + relPath);
-  if (!res.ok) throw new Error(`fetch ${relPath}: ${res.status}`);
-  return await res.text();
+const sigCache = new Map<string, Promise<string>>();
+function fetchSignatureFile(relPath: string): Promise<string> {
+  const url = signaturesBaseUrl + relPath;
+  let p = sigCache.get(url);
+  if (!p) {
+    p = (async () => {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`fetch ${relPath}: ${res.status}`);
+      return await res.text();
+    })();
+    p.catch(() => sigCache.delete(url));
+    sigCache.set(url, p);
+  }
+  return p;
 }
 
 function getFileInfo(bytes: Uint8Array): FileInfo {
@@ -337,6 +347,10 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
 
   const sessionReply = openSession({ id: -1, cmd: "openSession", bytes: req.bytes, optionsJson });
   const sessionPtr = sessions.get(sessionReply.sessionId)!;
+
+  for (const e of [...(manifest.dbs.db?.[sessionReply.jsClass] ?? []),
+                   ...(manifest.dbs.db_extra?.[sessionReply.jsClass] ?? [])])
+    if (e.kind === "sg") void fetchSignatureFile(e.path).catch(() => {});
 
   const memoryMap = safe(() => getMemoryMap(sessionPtr));
   const structure = safe(() => getFormatStruct(sessionPtr)) ?? [];

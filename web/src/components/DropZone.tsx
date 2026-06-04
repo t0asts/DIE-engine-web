@@ -57,7 +57,7 @@ export function DropZone({ compact = false }: { compact?: boolean }) {
         (dragging ? "border-amber-400 bg-amber-400/5" : "border-zinc-700 hover:border-zinc-500")
       }
     >
-      <div className="text-lg font-medium">Drop a binary here</div>
+      <div className="text-lg font-medium">Drop a file here</div>
       <div className="text-sm text-zinc-400 mt-2">
         PE, ELF, Mach-O, .apk, .pdf, archives
       </div>

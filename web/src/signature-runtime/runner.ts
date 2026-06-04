@@ -110,17 +110,32 @@ export async function runScan(opts: RunScanOpts): Promise<RunScanResult> {
     errors.push("db/_init (framework prelude) missing from signature pack - detections will fail");
   }
 
-  for (const sg of sgEntries) {
+  const CONCURRENCY = 24;
+  const sources: Array<Promise<string> | undefined> = new Array(sgEntries.length);
+  let started = 0;
+  const start = (i: number): void => {
+    if (i < sgEntries.length) sources[i] = loadFile(sgEntries[i]!.path);
+  };
+  for (; started < Math.min(CONCURRENCY, sgEntries.length); started++) start(started);
+
+  for (let i = 0; i < sgEntries.length; i++) {
+    const sg = sgEntries[i]!;
+    let sgSource: string;
     try {
-      const sgSource = await loadFile(sg.path);
+      sgSource = await sources[i]!;
+    } catch (e) {
+      errors.push(`${sg.path}: ${errMsg(e)}`);
+      start(started++);
+      continue;
+    }
+    start(started++);
+    try {
       await evalScript(
         { rootInitSource, formatInitSource, sgSource, resolveInclude },
         { binding: bindingObj, fmt: opts.jsClass, records: allRecords },
       );
     } catch (e) {
-      const err = e as Error | string;
-      const msg = typeof err === "string" ? err : err.message;
-      errors.push(`${sg.path}: ${msg}`);
+      errors.push(`${sg.path}: ${errMsg(e)}`);
     }
   }
 
@@ -280,6 +295,10 @@ function patchPrototypesOnce(): void {
 function basename(p: string): string {
   const i = p.lastIndexOf("/");
   return i < 0 ? p : p.slice(i + 1);
+}
+
+function errMsg(e: unknown): string {
+  return e instanceof Error ? e.message : typeof e === "string" ? e : String(e);
 }
 
 void METHOD_IDS;
