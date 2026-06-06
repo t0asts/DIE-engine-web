@@ -5,6 +5,10 @@ import type { ScanResult } from "../worker/protocol";
 import { useSettings, scanOptionsFromSettings } from "./settings";
 import { recordRecentFile } from "./recent";
 
+function makeId(name: string): string {
+  return `${name}::${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+}
+
 export interface DroppedFile {
   id: string;
   name: string;
@@ -27,23 +31,34 @@ interface WorkspaceState {
   scans: Map<string, ScanEntry>;
 
   addFile(file: DroppedFile): Promise<void>;
+  ingestFiles(list: FileList | File[]): Promise<void>;
   rescan(id: string): Promise<void>;
   rescanAll(): Promise<void>;
   setActive(id: string): void;
+  closeFile(id: string): void;
   clear(): void;
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => {
   const client = new ScanClient();
 
+  function setScan(id: string, entry: ScanEntry): void {
+    set((s) => {
+      if (!s.files.some((f) => f.id === id)) return s;
+      const next = new Map(s.scans);
+      next.set(id, entry);
+      return { scans: next };
+    });
+  }
+
   async function runScanFor(file: DroppedFile): Promise<void> {
-    set((s) => { const next = new Map(s.scans); next.set(file.id, { status: "loading" }); return { scans: next }; });
+    setScan(file.id, { status: "loading" });
     try {
       const result = await client.scan(file.bytes.slice(0), scanOptionsFromSettings(useSettings.getState()));
-      set((s) => { const next = new Map(s.scans); next.set(file.id, { status: "ready", result }); return { scans: next }; });
+      setScan(file.id, { status: "ready", result });
       recordRecentFile({ name: file.name, size: file.size, format: result.fileInfo.primaryFormat, when: Date.now() });
     } catch (e) {
-      set((s) => { const next = new Map(s.scans); next.set(file.id, { status: "error", error: (e as Error).message }); return { scans: next }; });
+      setScan(file.id, { status: "error", error: (e as Error).message });
     }
   }
 
@@ -58,6 +73,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
       await runScanFor(file);
     },
 
+    async ingestFiles(list) {
+      for (const file of Array.from(list)) {
+        const buf = await file.arrayBuffer();
+        await get().addFile({ id: makeId(file.name), name: file.name, size: file.size, bytes: buf });
+      }
+    },
+
     async rescan(id) {
       const file = get().files.find((f) => f.id === id);
       if (file) await runScanFor(file);
@@ -69,6 +91,21 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     setActive(id) {
       set({ activeId: id });
+    },
+
+    closeFile(id) {
+      set((s) => {
+        const idx = s.files.findIndex((f) => f.id === id);
+        if (idx === -1) return s;
+        const files = s.files.filter((f) => f.id !== id);
+        const scans = new Map(s.scans);
+        scans.delete(id);
+        const activeId =
+          s.activeId === id
+            ? (s.files[idx + 1] ?? s.files[idx - 1] ?? null)?.id ?? null
+            : s.activeId;
+        return { files, scans, activeId };
+      });
     },
 
     clear() {

@@ -6,6 +6,7 @@ import { DropZone } from "./components/DropZone";
 import { FileList } from "./components/FileList";
 import { ScanResultPanel } from "./components/ScanResultPanel";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { useDropUpload } from "./components/useDropUpload";
 
 function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -56,6 +57,7 @@ export function App() {
   const activeId = useWorkspace((s) => s.activeId);
   const [showSettings, setShowSettings] = useState(false);
   const [showSidebar, setShowSidebar] = useState(true);
+  const { isDragging, dropHandlers } = useDropUpload();
 
   return (
     <div className="h-full flex flex-col">
@@ -92,7 +94,13 @@ export function App() {
       ) : (
         <div className={`flex-1 grid min-h-0 ${showSidebar ? "grid-cols-[260px_1fr]" : "grid-cols-1"}`}>
           {showSidebar ? (
-            <aside className="border-r border-zinc-800 overflow-y-auto">
+            <aside
+              {...dropHandlers}
+              className={
+                "border-r border-zinc-800 overflow-y-auto relative " +
+                (isDragging ? "ring-2 ring-inset ring-amber-400/70 bg-amber-400/5" : "")
+              }
+            >
               <FileList />
               <div className="p-3 border-t border-zinc-800">
                 <DropZone compact />
