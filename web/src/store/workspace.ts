@@ -36,6 +36,7 @@ interface WorkspaceState {
   rescanAll(): Promise<void>;
   setActive(id: string): void;
   closeFile(id: string): void;
+  closeAll(): void;
   clear(): void;
 }
 
@@ -106,6 +107,10 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
             : s.activeId;
         return { files, scans, activeId };
       });
+    },
+
+    closeAll() {
+      set({ files: [], activeId: null, scans: new Map() });
     },
 
     clear() {

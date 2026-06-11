@@ -40,8 +40,13 @@ if [[ -d "$yara_src" ]]; then
   yara_files=(
     DiE_BasicHeuristics_by_DosX.yar
     DiE_InterestingThings_by_DosX.yar
+    DiE_EnhancedHeuristics_by_DosX.yar
     DosX_Heuristic.yar
     packer_compiler_signatures.yar
+    crypto_signature.yar
+    malware_analisys.yar
+    packer.yar
+    peid.yar
   )
   staged=()
   for f in "${yara_files[@]}"; do

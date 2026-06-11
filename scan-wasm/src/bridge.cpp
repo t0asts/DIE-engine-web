@@ -223,6 +223,48 @@ void appendMachStruct(XMACH* mach, QJsonArray& top) {
     top.append(jGroup(QStringLiteral("Load commands"), QString::number(cmds.size()), ch));
 }
 
+QString winCertTypeName(quint16 nType) {
+    switch (nType) {
+        case 0x0001: return QStringLiteral("X.509");
+        case 0x0002: return QStringLiteral("PKCS#7 SignedData");
+        case 0x0003: return QStringLiteral("Reserved");
+        case 0x0004: return QStringLiteral("PKCS1 ModuleSign");
+        default:     return QStringLiteral("Unknown");
+    }
+}
+
+bool looksLikeOid(const QString& s) {
+    if (s.isEmpty() || !s.at(0).isDigit()) return false;
+    bool bDot = false;
+    for (const QChar c : s) {
+        if (c == QLatin1Char('.')) bDot = true;
+        else if (!c.isDigit()) return false;
+    }
+    return bDot;
+}
+
+QJsonObject certRecordToJson(const XPE::CERT_RECORD& rec) {
+    QJsonObject o;
+    o["tag"]    = XPE::certTagToString(rec.certTag.nTag);
+    o["tagId"]  = static_cast<double>(rec.certTag.nTag);
+    o["offset"] = static_cast<double>(rec.certTag.nOffset);
+    o["size"]   = static_cast<double>(rec.certTag.nSize);
+    const QString sVal = rec.varValue.toString();
+    if (!sVal.isEmpty()) {
+        o["value"] = sVal;
+        if (looksLikeOid(sVal)) {
+            const QString sOid = XPE::objectIdToString(sVal);
+            if (!sOid.isEmpty() && sOid != sVal) o["oidName"] = sOid;
+        }
+    }
+    if (!rec.listRecords.isEmpty()) {
+        QJsonArray kids;
+        for (const XPE::CERT_RECORD& k : rec.listRecords) kids.append(certRecordToJson(k));
+        o["children"] = kids;
+    }
+    return o;
+}
+
 }
 
 extern "C" char* die_dispatch_invoke(die_web::Session* session, int methodId,
@@ -923,6 +965,39 @@ char* die_get_import_hash(void* session) {
             const quint64 h64 = pe->getImportHash64(&imps, &pd);
             out["importHash32"] = QStringLiteral("0x") + QString::number(h32, 16).rightJustified(8, QLatin1Char('0'));
             out["importHash64"] = QStringLiteral("0x") + QString::number(h64, 16).rightJustified(16, QLatin1Char('0'));
+        }
+    }
+    return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
+}
+
+EMSCRIPTEN_KEEPALIVE
+char* die_get_certificates(void* session) {
+    auto* s = asSession(session);
+    if (!s || !s->binary()) return nullptr;
+    QJsonObject out;
+    out["present"] = false;
+    if (s->jsClass() == "PE") {
+        XPE* pe = static_cast<XPE*>(s->binary());
+        const auto os = pe->getSignOffsetSize();
+        if (os.nSize > 0) {
+            out["present"]        = true;
+            out["securityOffset"] = static_cast<double>(os.nOffset);
+            out["securitySize"]   = static_cast<double>(os.nSize);
+            QJsonArray certs;
+            const QList<XPE::CERT> list = pe->getCertList();
+            for (const XPE::CERT& cert : list) {
+                QJsonObject c;
+                c["offset"]    = static_cast<double>(cert.nOffset);
+                c["length"]    = static_cast<double>(cert.record.dwLength);
+                c["revision"]  = QStringLiteral("0x") +
+                    QString::number(cert.record.wRevision, 16).rightJustified(4, QLatin1Char('0'));
+                c["type"]      = static_cast<int>(cert.record.wCertificateType);
+                c["typeName"]  = winCertTypeName(cert.record.wCertificateType);
+                c["valid"]     = cert.bIsValid;
+                c["structure"] = certRecordToJson(cert.certRecord);
+                certs.append(c);
+            }
+            out["certificates"] = certs;
         }
     }
     return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));

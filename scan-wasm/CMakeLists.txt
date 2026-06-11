@@ -39,6 +39,7 @@ add_library(capstone STATIC
     ${_CS_SRC}/arch/X86/X86Disassembler.c
     ${_CS_SRC}/arch/X86/X86DisassemblerDecoder.c
     ${_CS_SRC}/arch/X86/X86IntelInstPrinter.c
+    ${_CS_SRC}/arch/X86/X86InstPrinterCommon.c
     ${_CS_SRC}/arch/X86/X86Mapping.c
     ${_CS_SRC}/arch/X86/X86Module.c
     ${_CS_SRC}/arch/ARM/ARMDisassembler.c
@@ -67,7 +68,7 @@ target_include_directories(capstone PUBLIC ${_CS_SRC}/include)
 target_compile_definitions(capstone PRIVATE
     CAPSTONE_HAS_X86 CAPSTONE_HAS_ARM CAPSTONE_HAS_ARM64
     CAPSTONE_HAS_MIPS CAPSTONE_HAS_POWERPC CAPSTONE_HAS_RISCV
-    CAPSTONE_X86_ATT_DISABLE CAPSTONE_X86_REDUCE
+    CAPSTONE_X86_ATT_DISABLE
     CAPSTONE_DIET_NO CAPSTONE_USE_SYS_DYN_MEM _LIB
 )
 target_compile_options(capstone PRIVATE
@@ -210,6 +211,7 @@ set(EXPORTED_FUNCTIONS_LIST
     "_die_extract"
     "_die_demangle"
     "_die_get_import_hash"
+    "_die_get_certificates"
     "_malloc"
     "_free"
 )

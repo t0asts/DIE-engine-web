@@ -23,6 +23,7 @@ import type {
   DisasmMode,
   SymbolEntry,
   ExtractEntry,
+  CertificateInfo,
   ExtractArchiveEntryRequest,
 } from "./protocol";
 
@@ -131,6 +132,15 @@ function getImportHash(sessionPtr: number): Partial<Hashes> {
   const json = mod.UTF8ToString(resPtr);
   mod.ccall("die_free_string", null, ["number"], [resPtr]);
   return JSON.parse(json) as Partial<Hashes>;
+}
+
+function getCertificates(sessionPtr: number): CertificateInfo | null {
+  if (!mod) throw new Error("not initialized");
+  const resPtr = mod.ccall("die_get_certificates", "number", ["number"], [sessionPtr]) as number;
+  if (!resPtr) return null;
+  const json = mod.UTF8ToString(resPtr);
+  mod.ccall("die_free_string", null, ["number"], [resPtr]);
+  return JSON.parse(json) as CertificateInfo;
 }
 
 function getMemoryMap(sessionPtr: number): MemoryMap | null {
@@ -361,6 +371,8 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
   const importHash = safe(() => getImportHash(sessionPtr)) ?? {};
   const hashesFull: Hashes = { ...hashes, ...importHash };
 
+  const certificates = safe(() => getCertificates(sessionPtr)) ?? null;
+
   const disasmAvailable = !!memoryMap && DISASM_SUPPORTED_ARCH_RE.test(memoryMap.arch);
 
   const strings = safe(() => scanStrings(bytes, { minLen: stringsMinLen, maxResults: 50_000 })) ?? [];
@@ -405,6 +417,7 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
     symbols,
     extracted,
     mime,
+    certificates,
     disasmAvailable,
     durationMs: Math.round(performance.now() - t0),
   };

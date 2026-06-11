@@ -68,12 +68,12 @@ jobs:
           docker build -t die-web-dev -f docker/Dockerfile.dev .
           docker run --rm -v "$PWD:/work" -w /work die-web-dev \
             bash -c '. /opt/emsdk/emsdk_env.sh && ./scan-wasm/build.sh'
-      - name: Bundle-size budget (<= 12 MB uncompressed)
+      - name: Bundle-size budget (<= 16 MB uncompressed)
         run: |
           size=$(stat -c %s scan-wasm/dist/scan_engine.wasm)
           echo "scan_engine.wasm = $size bytes"
-          if [ "$size" -gt 12582912 ]; then
-            echo "::error ::wasm exceeds 12 MB budget"
+          if [ "$size" -gt 16777216 ]; then
+            echo "::error ::wasm exceeds 16 MB budget"
             exit 1
           fi
       - name: Upload wasm

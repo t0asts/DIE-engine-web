@@ -13,9 +13,25 @@ export function FileList() {
   const scans = useWorkspace((s) => s.scans);
   const setActive = useWorkspace((s) => s.setActive);
   const closeFile = useWorkspace((s) => s.closeFile);
+  const closeAll = useWorkspace((s) => s.closeAll);
 
   return (
-    <ul className="text-sm">
+    <>
+      <div className="sticky top-0 z-10 flex items-center justify-between px-3 py-2 border-b border-zinc-800 bg-zinc-950">
+        <span className="text-xs font-medium text-zinc-400">
+          {files.length} {files.length === 1 ? "file" : "files"}
+        </span>
+        <button
+          type="button"
+          onClick={closeAll}
+          disabled={files.length === 0}
+          title="Close all open files"
+          className="text-xs px-2 py-0.5 rounded text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-40"
+        >
+          Close all
+        </button>
+      </div>
+      <ul className="text-sm">
       {files.map((f) => {
         const entry = scans.get(f.id);
         const active = f.id === activeId;
@@ -52,7 +68,8 @@ export function FileList() {
           </li>
         );
       })}
-    </ul>
+      </ul>
+    </>
   );
 }
 

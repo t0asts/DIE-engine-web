@@ -167,6 +167,33 @@ export interface YaraScanResult {
   scanError?: number;
 }
 
+export interface CertAsn1Node {
+  tag: string;
+  tagId: number;
+  offset: number;
+  size: number;
+  value?: string;
+  oidName?: string;
+  children?: CertAsn1Node[];
+}
+
+export interface CertEntry {
+  offset: number;
+  length: number;
+  revision: string;
+  type: number;
+  typeName: string;
+  valid: boolean;
+  structure: CertAsn1Node;
+}
+
+export interface CertificateInfo {
+  present: boolean;
+  securityOffset?: number;
+  securitySize?: number;
+  certificates?: CertEntry[];
+}
+
 export interface ScanResult {
   fileInfo: FileInfo;
   hashes: Hashes;
@@ -181,6 +208,7 @@ export interface ScanResult {
   symbols: SymbolEntry[];
   extracted: ExtractEntry[];
   mime: string[];
+  certificates: CertificateInfo | null;
   disasmAvailable: boolean;
   durationMs: number;
 }

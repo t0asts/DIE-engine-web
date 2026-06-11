@@ -19,6 +19,8 @@ import { ArchivePanel } from "./ArchivePanel";
 import { ExtractorPanel } from "./ExtractorPanel";
 import { VisualizationPanel } from "./VisualizationPanel";
 import { HexView } from "./HexView";
+import { OverlayPanel } from "./OverlayPanel";
+import { CertificatePanel } from "./CertificatePanel";
 import { DataConverterPanel } from "./DataConverterPanel";
 import { DemanglerPanel } from "./DemanglerPanel";
 import { ExportButton } from "./ExportButton";
@@ -32,10 +34,16 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
   const entry = useWorkspace((s) => s.scans.get(fileId));
   const [activeTab, setActiveTab] = useState("detection");
   const [decompileTarget, setDecompileTarget] = useState<{ addr: number; nonce: number } | null>(null);
+  const [hexTarget, setHexTarget] = useState<{ offset: number; nonce: number } | null>(null);
 
   const navToDecompile = useCallback((addr: number) => {
     setDecompileTarget((prev) => ({ addr, nonce: (prev?.nonce ?? 0) + 1 }));
     setActiveTab("decompile");
+  }, []);
+
+  const navToHex = useCallback((offset: number) => {
+    setHexTarget((prev) => ({ offset, nonce: (prev?.nonce ?? 0) + 1 }));
+    setActiveTab("hex");
   }, []);
 
   if (!file) return null;
@@ -69,15 +77,20 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
   const symBase = symbolAddrBase(r);
   const isPE = r.formatClass === "PE";
   const extractedCount = r.extracted?.length ?? 0;
+  const overlay = r.memoryMap?.records.find((rec) => rec.name === "Overlay" || rec.filePart === 32) ?? null;
+  const hasOverlay = !!overlay && overlay.size > 0;
+  const hasCert = !!r.certificates?.present;
 
   const tabs: TabDef[] = [
     { id: "detection", label: "Detection", badge: r.records.length || undefined },
     { id: "sections",  label: "Sections",  badge: sectionCount || undefined },
+    ...(hasOverlay ? [{ id: "overlay", label: "Overlay" } as TabDef] : []),
     ...(structCount ? [{ id: "structure", label: "Structure" } as TabDef] : []),
     ...(symbolCount ? [{ id: "symbols", label: "Symbols", badge: symbolCount } as TabDef] : []),
     ...(canDisasm ? [{ id: "disasm", label: "Disasm" } as TabDef] : []),
     ...(decompArch ? [{ id: "decompile", label: "Decompile" } as TabDef] : []),
     ...(isPE ? [{ id: "peid", label: "PEiD" } as TabDef] : []),
+    ...(hasCert ? [{ id: "certificate", label: "Certificate", badge: r.certificates?.certificates?.length || undefined } as TabDef] : []),
     { id: "yara",      label: "YARA" },
     ...(r.archive
       ? [{ id: "archive", label: "Archive", badge: r.archive.totalEntries || undefined } as TabDef]
@@ -107,6 +120,7 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
       <div className="flex-1 overflow-auto min-h-0">
         {tab === "detection" ? <DetectionTab fileName={file.name} result={r} /> : null}
         {tab === "sections"  ? <SectionsPanel memoryMap={r.memoryMap} /> : null}
+        {tab === "overlay" && overlay ? <OverlayPanel overlay={overlay} bytes={file.bytes} fileName={file.name} totalSize={r.fileInfo.size} onViewHex={navToHex} /> : null}
         {tab === "structure" ? <StructPanel structure={r.structure ?? []} /> : null}
         {tab === "symbols"   ? <SymbolsPanel symbols={r.symbols ?? []} onDecompile={decompArch ? (addr) => navToDecompile(addr + symBase) : undefined} /> : null}
         {tab === "disasm"    ? <DisasmView bytes={file.bytes} entryPoint={entryPoint} arch={r.memoryMap?.arch ?? ""} onDecompile={decompArch ? navToDecompile : undefined} /> : null}
@@ -116,11 +130,12 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
           </Suspense>
         ) : null}
         {tab === "peid"      ? <PeidPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
+        {tab === "certificate" && r.certificates ? <CertificatePanel info={r.certificates} bytes={file.bytes} /> : null}
         {tab === "yara"      ? <YaraPanel bytes={file.bytes} /> : null}
         {tab === "archive" && r.archive ? <ArchivePanel archive={r.archive} bytes={file.bytes} parentName={file.name} /> : null}
         {tab === "extractor" ? <ExtractorPanel records={r.extracted ?? []} bytes={file.bytes} parentName={file.name} /> : null}
         {tab === "strings"   ? <StringsPanel strings={r.strings} /> : null}
-        {tab === "hex"       ? <HexView bytes={new Uint8Array(file.bytes)} /> : null}
+        {tab === "hex"       ? <HexView bytes={new Uint8Array(file.bytes)} target={hexTarget} /> : null}
         {tab === "visualize" ? <VisualizationPanel bytes={file.bytes} memoryMap={r.memoryMap} /> : null}
         {tab === "convert"   ? <DataConverterPanel /> : null}
         {tab === "demangle"  ? <DemanglerPanel /> : null}
