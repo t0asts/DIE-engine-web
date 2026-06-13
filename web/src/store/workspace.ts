@@ -4,6 +4,20 @@ import { ScanClient } from "../worker/client";
 import type { ScanResult } from "../worker/protocol";
 import { useSettings, scanOptionsFromSettings } from "./settings";
 import { recordRecentFile } from "./recent";
+import {
+  type FileLayout,
+  type Rect,
+  type Bounds,
+  defaultLayout,
+  applyFloat,
+  applyDock,
+  applyClose,
+  applyFocus,
+  applyMove,
+  applyResize,
+  applySnap,
+  applyClampAll,
+} from "./layout";
 
 function makeId(name: string): string {
   return `${name}::${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -29,6 +43,7 @@ interface WorkspaceState {
   files: DroppedFile[];
   activeId: string | null;
   scans: Map<string, ScanEntry>;
+  layouts: Map<string, FileLayout>;
 
   addFile(file: DroppedFile): Promise<void>;
   ingestFiles(list: FileList | File[]): Promise<void>;
@@ -38,6 +53,18 @@ interface WorkspaceState {
   closeFile(id: string): void;
   closeAll(): void;
   clear(): void;
+
+  setActiveTab(id: string, moduleId: string): void;
+  floatModule(id: string, moduleId: string, rect: Rect): void;
+  dockModule(id: string, moduleId: string): void;
+  closeModule(id: string, moduleId: string): void;
+  focusModule(id: string, moduleId: string): void;
+  moveWindow(id: string, moduleId: string, rect: Rect): void;
+  resizeWindow(id: string, moduleId: string, w: number, h: number): void;
+  snapWindow(id: string, moduleId: string, rect: Rect): void;
+  clampWindows(id: string, bounds: Bounds): void;
+  navToDecompile(id: string, addr: number): void;
+  navToHex(id: string, offset: number): void;
 }
 
 export const useWorkspace = create<WorkspaceState>((set, get) => {
@@ -63,14 +90,27 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
     }
   }
 
+  function updateLayout(id: string, fn: (cur: FileLayout) => FileLayout): void {
+    set((s) => {
+      const layouts = new Map(s.layouts);
+      layouts.set(id, fn(layouts.get(id) ?? defaultLayout()));
+      return { layouts };
+    });
+  }
+
   return {
     client,
     files: [],
     activeId: null,
     scans: new Map(),
+    layouts: new Map(),
 
     async addFile(file) {
-      set((s) => ({ files: [...s.files, file], activeId: file.id }));
+      set((s) => {
+        const layouts = new Map(s.layouts);
+        layouts.set(file.id, defaultLayout());
+        return { files: [...s.files, file], activeId: file.id, layouts };
+      });
       await runScanFor(file);
     },
 
@@ -101,21 +141,81 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
         const files = s.files.filter((f) => f.id !== id);
         const scans = new Map(s.scans);
         scans.delete(id);
+        const layouts = new Map(s.layouts);
+        layouts.delete(id);
         const activeId =
           s.activeId === id
             ? (s.files[idx + 1] ?? s.files[idx - 1] ?? null)?.id ?? null
             : s.activeId;
-        return { files, scans, activeId };
+        return { files, scans, layouts, activeId };
       });
     },
 
     closeAll() {
-      set({ files: [], activeId: null, scans: new Map() });
+      set({ files: [], activeId: null, scans: new Map(), layouts: new Map() });
     },
 
     clear() {
       get().client.dispose();
-      set({ files: [], activeId: null, scans: new Map() });
+      set({ files: [], activeId: null, scans: new Map(), layouts: new Map() });
+    },
+
+    setActiveTab(id, moduleId) {
+      updateLayout(id, (cur) => ({ ...cur, activeDockedTab: moduleId }));
+    },
+
+    floatModule(id, moduleId, rect) {
+      updateLayout(id, (cur) => applyFloat(cur, moduleId, rect));
+    },
+
+    dockModule(id, moduleId) {
+      updateLayout(id, (cur) => applyDock(cur, moduleId, true));
+    },
+
+    closeModule(id, moduleId) {
+      updateLayout(id, (cur) => applyClose(cur, moduleId));
+    },
+
+    focusModule(id, moduleId) {
+      updateLayout(id, (cur) => applyFocus(cur, moduleId));
+    },
+
+    moveWindow(id, moduleId, rect) {
+      updateLayout(id, (cur) => applyMove(cur, moduleId, rect));
+    },
+
+    resizeWindow(id, moduleId, w, h) {
+      updateLayout(id, (cur) => applyResize(cur, moduleId, w, h));
+    },
+
+    snapWindow(id, moduleId, rect) {
+      updateLayout(id, (cur) => applySnap(cur, moduleId, rect));
+    },
+
+    clampWindows(id, bounds) {
+      set((s) => {
+        const cur = s.layouts.get(id);
+        if (!cur) return s;
+        const next = applyClampAll(cur, bounds);
+        if (next === cur) return s;
+        const layouts = new Map(s.layouts);
+        layouts.set(id, next);
+        return { layouts };
+      });
+    },
+
+    navToDecompile(id, addr) {
+      updateLayout(id, (cur) => {
+        const l = applyFocus(cur, "decompile");
+        return { ...l, targets: { ...l.targets, decompile: { addr, nonce: (cur.targets.decompile?.nonce ?? 0) + 1 } } };
+      });
+    },
+
+    navToHex(id, offset) {
+      updateLayout(id, (cur) => {
+        const l = applyFocus(cur, "hex");
+        return { ...l, targets: { ...l.targets, hex: { offset, nonce: (cur.targets.hex?.nonce ?? 0) + 1 } } };
+      });
     },
   };
 });
