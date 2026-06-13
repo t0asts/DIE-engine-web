@@ -18,6 +18,9 @@ concurrency:
   group: pages-${{ github.ref }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   shim-gen:
     runs-on: ubuntu-latest
