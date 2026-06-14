@@ -91,7 +91,14 @@ export function ModuleView({
     case "decompile":
       return decompArch ? (
         <Suspense fallback={<div className="p-8 text-zinc-500">Loading decompiler...</div>}>
-          <DecompilerPanel result={r} bytes={file.bytes} arch={decompArch} target={decompileTarget} />
+          <DecompilerPanel
+            key={file.id}
+            fileId={file.id}
+            result={r}
+            bytes={file.bytes}
+            arch={decompArch}
+            target={decompileTarget}
+          />
         </Suspense>
       ) : null;
     case "peid":

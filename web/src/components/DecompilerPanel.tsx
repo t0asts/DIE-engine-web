@@ -6,11 +6,16 @@ import type { DecompArch } from "../decompiler/arch-map";
 import type { DecompFunction } from "../decompiler/protocol";
 import { buildDecompInput } from "../decompiler/regions";
 import { getDecompilerClient, type DecompilerSession } from "../decompiler/client";
+import { getDecompState, markSessionUsed, type DecompFileState } from "../decompiler/cache";
 import { setupMonaco } from "../decompiler/monaco-setup";
 
 setupMonaco();
 
+type MonacoEditor = Parameters<OnMount>[0];
+type ViewState = NonNullable<ReturnType<MonacoEditor["saveViewState"]>>;
+
 interface Props {
+  fileId: string;
   result: ScanResult;
   bytes: ArrayBuffer;
   arch: DecompArch;
@@ -40,10 +45,21 @@ function harvestFunAddrs(code: string): number[] {
   return out;
 }
 
-export function DecompilerPanel({ result, bytes, arch, target }: Props) {
+export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) {
   const input = useMemo(() => buildDecompInput(result, bytes), [result, bytes]);
 
-  const [discovered, setDiscovered] = useState<Map<number, DecompFunction>>(new Map());
+  const stateRef = useRef<DecompFileState | null>(null);
+  if (stateRef.current === null) stateRef.current = getDecompState(fileId, arch.languageId);
+  const state = stateRef.current;
+
+  const stale = state.result !== null && state.result !== result;
+  const reusable = !stale && state.session !== null;
+
+  const mountedRef = useRef(true);
+
+  const [discovered, setDiscovered] = useState<Map<number, DecompFunction>>(() =>
+    stale ? new Map() : new Map(state.discovered),
+  );
   const [discovering, setDiscovering] = useState(false);
 
   const allFunctions = useMemo(() => {
@@ -65,49 +81,127 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
     return m;
   }, [allFunctions, input.symbols]);
 
-  const [session, setSession] = useState<DecompilerSession | null>(null);
-  const [opening, setOpening] = useState(true);
+  const [session, setSession] = useState<DecompilerSession | null>(reusable ? state.session : null);
+  const [opening, setOpening] = useState(!reusable);
   const [openErr, setOpenErr] = useState<string | null>(null);
-  const [addr, setAddr] = useState<number | null>(null);
-  const [code, setCode] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  const [addr, setAddr] = useState<number | null>(stale ? null : state.selected);
+  const [code, setCode] = useState<string>(() =>
+    !stale && state.selected != null ? state.code.get(state.selected) ?? "" : "",
+  );
+  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">(
+    !stale && state.selected != null && state.code.has(state.selected) ? "done" : "idle",
+  );
   const [error, setError] = useState<string | null>(null);
-  const [filter, setFilter] = useState("");
+  const [filter, setFilter] = useState(state.filter);
 
-  const cache = useRef(new Map<number, string>());
+  const cache = useRef(state.code);
+
+  const editorRef = useRef<MonacoEditor | null>(null);
+  const viewAddrRef = useRef<number | null>(stale ? null : state.selected);
+  const restoringRef = useRef(false);
+  const [displayTick, setDisplayTick] = useState(0);
 
   const seedAddrs = useMemo(() => new Set(input.functions.map((f) => f.addr)), [input.functions]);
+
+  const bumpDiscovered = useCallback(() => {
+    if (mountedRef.current) setDiscovered(new Map(state.discovered));
+  }, [state]);
 
   const mergeCallTargets = useCallback(
     (calls: { addr: number; name?: string }[]): number[] => {
       const fresh: number[] = [];
-      setDiscovered((prev) => {
-        let changed = false;
-        const next = new Map(prev);
-        for (const c of calls) {
-          if (c.addr <= 0 || seedAddrs.has(c.addr) || next.has(c.addr)) continue;
-          next.set(c.addr, { addr: c.addr, name: c.name || `FUN_${c.addr.toString(16)}`, kind: "discovered" });
-          fresh.push(c.addr);
-          changed = true;
-        }
-        return changed ? next : prev;
-      });
+      let changed = false;
+      for (const c of calls) {
+        if (c.addr <= 0 || seedAddrs.has(c.addr) || state.discovered.has(c.addr)) continue;
+        state.discovered.set(c.addr, {
+          addr: c.addr,
+          name: c.name || `FUN_${c.addr.toString(16)}`,
+          kind: "discovered",
+        });
+        fresh.push(c.addr);
+        changed = true;
+      }
+      if (changed) bumpDiscovered();
       return fresh;
     },
-    [seedAddrs],
+    [seedAddrs, state, bumpDiscovered],
+  );
+
+  const persistView = useCallback(() => {
+    if (restoringRef.current) return;
+    const ed = editorRef.current;
+    const a = viewAddrRef.current;
+    if (!ed || a == null) return;
+    const vs = ed.saveViewState();
+    if (vs) state.viewState.set(a, vs);
+  }, [state]);
+
+  const present = useCallback(
+    (a: number, text: string) => {
+      persistView();
+      restoringRef.current = true;
+      viewAddrRef.current = a;
+      setCode(text);
+      setStatus("done");
+      setDisplayTick((t) => t + 1);
+    },
+    [persistView],
   );
 
   useEffect(() => {
+    state.filter = filter;
+  }, [filter, state]);
+
+  useEffect(
+    () => () => {
+      mountedRef.current = false;
+      if (state.discoverCancel) state.discoverCancel.cancelled = true;
+    },
+    [state],
+  );
+
+  useEffect(() => {
+    const ed = editorRef.current;
+    if (ed) {
+      const a = viewAddrRef.current;
+      const vs = a != null ? (state.viewState.get(a) as ViewState | undefined) : undefined;
+      if (vs) {
+        ed.restoreViewState(vs);
+      } else {
+        ed.setPosition({ lineNumber: 1, column: 1 });
+        ed.setScrollTop(0);
+        ed.setScrollLeft(0);
+      }
+    }
+    restoringRef.current = false;
+  }, [displayTick, state]);
+
+  useEffect(() => {
+    if (state.session && state.result === result) {
+      setSession(state.session);
+      setOpening(false);
+      markSessionUsed(fileId);
+      return;
+    }
+
+    if (state.result !== null && state.result !== result) {
+      void state.session?.close();
+      state.session = null;
+      state.opening = null;
+      state.code.clear();
+      state.discovered.clear();
+      state.viewState.clear();
+      state.selected = null;
+      state.lastTargetNonce = -1;
+    }
+
     let cancelled = false;
-    let opened: DecompilerSession | null = null;
     setOpening(true);
     setOpenErr(null);
-    setSession(null);
-    cache.current.clear();
-    setDiscovered(new Map());
 
-    getDecompilerClient()
-      .open({
+    const openPromise =
+      state.opening ??
+      getDecompilerClient().open({
         arch: arch.arch,
         languageId: arch.languageId,
         regions: input.regions,
@@ -116,46 +210,63 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
         readonly: input.readonly,
         strings: input.strings,
         functions: input.functions,
-      })
+      });
+    state.opening = openPromise;
+
+    openPromise
       .then((s) => {
-        if (cancelled) { void s.close(); return; }
-        opened = s;
+        state.session = s;
+        state.result = result;
+        state.opening = null;
+        markSessionUsed(fileId);
+        if (cancelled) return;
         setSession(s);
         setOpening(false);
       })
       .catch((e) => {
+        state.opening = null;
         if (!cancelled) {
-          setOpenErr((e as Error).message); setOpening(false);
+          setOpenErr((e as Error).message);
+          setOpening(false);
         }
       });
 
     return () => {
       cancelled = true;
-      if (opened) void opened.close();
     };
-  }, [input, arch.arch, arch.languageId]);
+  }, [state, result, input, arch.arch, arch.languageId, fileId]);
 
   const decompile = useCallback(
     async (a: number) => {
       if (!session || a <= 0) return;
-      setAddr(a);
+      if (mountedRef.current) setAddr(a);
+      state.selected = a;
       const hit = cache.current.get(a);
-      if (hit !== undefined) { setCode(hit); setStatus("done"); setError(null); return; }
-      setStatus("loading");
-      setError(null);
+      if (hit !== undefined) {
+        if (mountedRef.current) {
+          present(a, hit);
+          setError(null);
+        }
+        return;
+      }
+      if (mountedRef.current) {
+        setStatus("loading");
+        setError(null);
+      }
       try {
         const { code: c, calls } = await session.decompile(a, addrToName.get(a));
         cache.current.set(a, c);
-        setCode(c);
-        setStatus("done");
+        if (mountedRef.current) present(a, c);
         const ptrs = harvestFunAddrs(c).map((addr) => ({ addr }));
         mergeCallTargets([...calls, ...ptrs]);
       } catch (e) {
-        setError((e as Error).message);
-        setStatus("error");
+        if (mountedRef.current) {
+          setError((e as Error).message);
+          setStatus("error");
+        }
       }
     },
-    [session, addrToName, mergeCallTargets],
+    [session, addrToName, mergeCallTargets, present, state],
   );
 
   const MAX_DISCOVER = 4000;
@@ -163,29 +274,32 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
     async (seeds: number[]) => {
       if (!session || discovering) return;
       setDiscovering(true);
+      const token = { cancelled: false };
+      state.discoverCancel = token;
 
       const known = new Set<number>(seedAddrs);
-      for (const a of discovered.keys()) known.add(a);
+      for (const a of state.discovered.keys()) known.add(a);
 
       const visited = new Set<number>();
       const queue: number[] = [];
-      const enqueue = (a: number) => { if (a > 0 && !visited.has(a)) { visited.add(a); queue.push(a); } };
+      const enqueue = (a: number) => {
+        if (a > 0 && !visited.has(a)) {
+          visited.add(a);
+          queue.push(a);
+        }
+      };
       for (const a of seeds) enqueue(a);
 
-      let pending = new Map<number, DecompFunction>();
+      let sinceFlush = 0;
       const flush = () => {
-        if (pending.size === 0) return;
-        const batch = pending;
-        pending = new Map();
-        setDiscovered((prev) => {
-          const next = new Map(prev);
-          for (const [a, f] of batch) if (!next.has(a)) next.set(a, f);
-          return next;
-        });
+        if (sinceFlush > 0) {
+          bumpDiscovered();
+          sinceFlush = 0;
+        }
       };
 
       try {
-        while (queue.length > 0 && visited.size <= MAX_DISCOVER) {
+        while (queue.length > 0 && visited.size <= MAX_DISCOVER && !token.cancelled) {
           const a = queue.shift()!;
           let calls: { addr: number; name?: string }[];
           let codeText = cache.current.get(a);
@@ -210,33 +324,33 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
           for (const n of neighbours) {
             if (!known.has(n)) {
               known.add(n);
-              pending.set(n, {
+              state.discovered.set(n, {
                 addr: n,
                 name: nameOf.get(n) || addrToName.get(n) || `FUN_${n.toString(16)}`,
                 kind: "discovered",
               });
+              sinceFlush++;
             }
             enqueue(n);
           }
-          if (pending.size >= 128) flush();
+          if (sinceFlush >= 128) flush();
         }
-        flush();
-      } catch {
-        flush();
       } finally {
-        setDiscovering(false);
+        flush();
+        if (state.discoverCancel === token) state.discoverCancel = null;
+        if (mountedRef.current) setDiscovering(false);
       }
     },
-    [session, discovering, seedAddrs, discovered, addrToName],
+    [session, discovering, seedAddrs, state, addrToName, bumpDiscovered],
   );
 
   const discoverAll = useCallback(() => {
     const seeds: number[] = [];
     if (input.entryPoint > 0) seeds.push(input.entryPoint);
     for (const f of input.functions) seeds.push(f.addr);
-    for (const a of discovered.keys()) seeds.push(a);
+    for (const a of state.discovered.keys()) seeds.push(a);
     return runDiscovery(seeds);
-  }, [runDiscovery, input.entryPoint, input.functions, discovered]);
+  }, [runDiscovery, input.entryPoint, input.functions, state]);
 
   const discoverFromCurrent = useCallback(() => {
     if (addr == null || addr <= 0) return Promise.resolve();
@@ -250,12 +364,28 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
 
   useEffect(() => {
     if (!session) return;
-    const a = target?.addr ?? input.entryPoint ?? input.functions[0]?.addr ?? 0;
+    if (target && target.nonce !== state.lastTargetNonce) {
+      state.lastTargetNonce = target.nonce;
+      if (target.addr > 0) {
+        void decompile(target.addr);
+        return;
+      }
+    }
+    if (state.selected != null && state.selected > 0) {
+      void decompile(state.selected);
+      return;
+    }
+    const a = input.entryPoint ?? input.functions[0]?.addr ?? 0;
     if (a > 0) void decompile(a);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, target?.addr, target?.nonce]);
 
   const handleMount: OnMount = (editor) => {
+    editorRef.current = editor;
+    const a = viewAddrRef.current;
+    const vs = a != null ? (state.viewState.get(a) as ViewState | undefined) : undefined;
+    if (vs) editor.restoreViewState(vs);
+    editor.onDidScrollChange(() => persistView());
+    editor.onDidChangeCursorPosition(() => persistView());
     editor.onMouseDown((e) => {
       if (!(e.event.ctrlKey || e.event.metaKey)) return;
       const pos = e.target.position;
