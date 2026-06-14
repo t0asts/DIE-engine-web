@@ -112,6 +112,7 @@ export function DecompilerPanel({ result, bytes, arch, target }: Props) {
         languageId: arch.languageId,
         regions: input.regions,
         symbols: input.symbols,
+        imports: input.imports,
         readonly: input.readonly,
         strings: input.strings,
         functions: input.functions,

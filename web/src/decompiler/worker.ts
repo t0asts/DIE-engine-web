@@ -30,6 +30,7 @@ interface DecompApi {
   create(languageId: string): number;
   addRegion(handle: number, addr: bigint, ptr: number, size: number): number;
   addSymbol(handle: number, addr: bigint, name: string): number;
+  addImport(handle: number, addr: bigint, name: string): number;
   addReadonly(handle: number, addr: bigint, size: bigint): number;
   addString(handle: number, addr: bigint, len: bigint): number;
   decompile(handle: number, addr: bigint, name: string): number;
@@ -55,6 +56,7 @@ function bindApi(m: EmModule): DecompApi {
     create: m.cwrap("decomp_create", "number", ["string"]) as DecompApi["create"],
     addRegion: m.cwrap("decomp_add_region", "number", ["number", "bigint", "number", "number"]) as DecompApi["addRegion"],
     addSymbol: m.cwrap("decomp_add_symbol", "number", ["number", "bigint", "string"]) as DecompApi["addSymbol"],
+    addImport: m.cwrap("decomp_add_import", "number", ["number", "bigint", "string"]) as DecompApi["addImport"],
     addReadonly: m.cwrap("decomp_add_readonly", "number", ["number", "bigint", "bigint"]) as DecompApi["addReadonly"],
     addString: m.cwrap("decomp_add_string", "number", ["number", "bigint", "bigint"]) as DecompApi["addString"],
     decompile: m.cwrap("decomp_decompile", "number", ["number", "bigint", "string"]) as DecompApi["decompile"],
@@ -124,6 +126,7 @@ function doOpen(req: DecompOpenRequest): number {
     mod._free(ptr);
   }
   for (const [addr, name] of req.symbols) api.addSymbol(handle, BigInt(addr), name);
+  for (const [addr, name] of req.imports) api.addImport(handle, BigInt(addr), name);
   for (const [addr, size] of req.readonly) api.addReadonly(handle, BigInt(addr), BigInt(size));
   for (const [addr, len] of req.strings) api.addString(handle, BigInt(addr), BigInt(len));
 

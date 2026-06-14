@@ -4,6 +4,7 @@ import type { DecompRegion, DecompFunction } from "./protocol";
 export interface DecompInput {
   regions: DecompRegion[];
   symbols: [number, string][];
+  imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
   functions: DecompFunction[];
@@ -11,6 +12,15 @@ export interface DecompInput {
 }
 
 const MAX_FUNCTIONS = 5000;
+
+const WRITABLE_SECTION_RE = /^\.?(data|bss|sdata|sbss|tdata|tbss|got|toc)\b/i;
+
+interface MappedRange {
+  off: number;
+  addr: number;
+  size: number;
+  name: string;
+}
 
 export function symbolAddrBase(result: ScanResult): number {
   return result.formatClass === "PE" ? (result.memoryMap?.moduleAddress ?? 0) : 0;
@@ -22,6 +32,7 @@ export function buildDecompInput(result: ScanResult, fileBytes: ArrayBuffer): De
 
   const regions: DecompRegion[] = [];
   const seenRegion = new Set<string>();
+  const mapped: MappedRange[] = [];
   if (mm) {
     for (const r of mm.records) {
       if (r.isVirtual || r.offset < 0 || r.size <= 0) continue;
@@ -32,6 +43,7 @@ export function buildDecompInput(result: ScanResult, fileBytes: ArrayBuffer): De
       if (seenRegion.has(key)) continue;
       seenRegion.add(key);
       regions.push({ vaddr: r.address, bytes: fileBytes.slice(r.offset, r.offset + len) });
+      mapped.push({ off: r.offset, addr: r.address, size: len, name: r.name });
     }
   }
 
@@ -46,10 +58,19 @@ export function buildDecompInput(result: ScanResult, fileBytes: ArrayBuffer): De
     seenFn.add(entryPoint);
   }
 
+  const isPE = result.formatClass === "PE";
+  const imports: [number, string][] = [];
   const base = symbolAddrBase(result);
   for (const s of result.symbols ?? []) {
     if (typeof s.address !== "number" || s.address <= 0 || !s.name) continue;
     const a = s.address + base;
+    if (isPE && s.kind === "import") {
+      if (!seenSym.has(a)) {
+        seenSym.add(a);
+        imports.push([a, s.name]);
+      }
+      continue;
+    }
     if (!seenSym.has(a)) {
       seenSym.add(a);
       symbols.push([a, s.name]);
@@ -63,5 +84,22 @@ export function buildDecompInput(result: ScanResult, fileBytes: ArrayBuffer): De
 
   functions.sort((a, b) => a.addr - b.addr);
 
-  return { regions, symbols, readonly: [], strings: [], functions, entryPoint };
+  const strings: [number, number][] = [];
+  const readonly: [number, number][] = [];
+  const seenStr = new Set<number>();
+  const findRange = (off: number, len: number): MappedRange | undefined =>
+    mapped.find((m) => off >= m.off && off + len <= m.off + m.size);
+  for (const st of result.strings ?? []) {
+    if (st.encoding !== "ascii" || st.length <= 0) continue;
+    const rec = findRange(st.offset, st.length);
+    if (!rec) continue;
+    const vaddr = rec.addr + (st.offset - rec.off);
+    if (seenStr.has(vaddr)) continue;
+    seenStr.add(vaddr);
+    const byteLen = st.length + 1;
+    strings.push([vaddr, byteLen]);
+    if (!WRITABLE_SECTION_RE.test(rec.name)) readonly.push([vaddr, byteLen]);
+  }
+
+  return { regions, symbols, imports, readonly, strings, functions, entryPoint };
 }

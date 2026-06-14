@@ -35,6 +35,7 @@ export interface DecompOpenRequest {
   languageId: string;
   regions: DecompRegion[];
   symbols: [number, string][];
+  imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
 }

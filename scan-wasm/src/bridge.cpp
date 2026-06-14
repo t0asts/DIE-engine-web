@@ -10,6 +10,8 @@
 #include <QJsonParseError>
 #include <QJsonValue>
 #include <QModelIndex>
+#include <QHash>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 
@@ -849,6 +851,80 @@ const char* elfSymBind(quint8 stInfo) {
     }
 }
 
+void addElfPltThunks(XELF* elf, QJsonArray& syms) {
+    const bool is64 = (elf->getIdent_class() == 2);
+    const quint16 machine = is64 ? elf->getHdr64_machine() : elf->getHdr32_machine();
+    const bool x64 = (machine == 62);
+    if (machine != 3 && machine != 62) return;
+
+    QList<XELF_DEF::Elf_Shdr> shdrs = elf->getElf_ShdrList(10000);
+    const int nsec = shdrs.count();
+    if (nsec == 0) return;
+    const quint16 shstrndx = is64 ? elf->getHdr64_shstrndx() : elf->getHdr32_shstrndx();
+
+    QHash<quint64, QString> gotToName;
+    for (int i = 0; i < nsec; ++i) {
+        const quint32 stype = shdrs[i].sh_type;
+        if (stype != 4 && stype != 9) continue;
+        const quint32 symSec = shdrs[i].sh_link;
+        if (symSec == 0 || symSec >= static_cast<quint32>(nsec)) continue;
+        const quint32 strSec = shdrs[symSec].sh_link;
+        const QList<XELF_DEF::Elf_Sym> symList = elf->getElf_SymList(
+            static_cast<qint64>(shdrs[symSec].sh_offset), static_cast<qint64>(shdrs[symSec].sh_size));
+        const qint64 rOff  = static_cast<qint64>(shdrs[i].sh_offset);
+        const qint64 rSize = static_cast<qint64>(shdrs[i].sh_size);
+        auto note = [&](quint64 r_offset, quint64 r_info) {
+            const quint64 symIdx = is64 ? (r_info >> 32) : (r_info >> 8);
+            const quint64 rtype  = is64 ? (r_info & 0xffffffffULL) : (r_info & 0xffULL);
+            if (rtype != 6 && rtype != 7) return;
+            if (symIdx == 0 || symIdx >= static_cast<quint64>(symList.size())) return;
+            const QString name = elf->getStringFromSection(symList[static_cast<int>(symIdx)].st_name, strSec);
+            if (!name.isEmpty()) gotToName.insert(r_offset, name);
+        };
+        if (is64) {
+            if (stype == 4) for (const auto& r : elf->getElf64_RelaList(rOff, rSize)) note(r.r_offset, r.r_info);
+            else            for (const auto& r : elf->getElf64_RelList(rOff, rSize))  note(r.r_offset, r.r_info);
+        } else {
+            if (stype == 4) for (const auto& r : elf->getElf32_RelaList(rOff, rSize)) note(r.r_offset, r.r_info);
+            else            for (const auto& r : elf->getElf32_RelList(rOff, rSize))  note(r.r_offset, r.r_info);
+        }
+    }
+    if (gotToName.isEmpty()) return;
+
+    QSet<quint64> emitted;
+    for (int i = 0; i < nsec && emitted.size() < 20000; ++i) {
+        const QString sname = elf->getStringFromSection(shdrs[i].sh_name, shstrndx);
+        if (!sname.startsWith(QStringLiteral(".plt"))) continue;
+        const quint64 secAddr = shdrs[i].sh_addr;
+        const qint64  secOff  = static_cast<qint64>(shdrs[i].sh_offset);
+        const qint64  secSize = static_cast<qint64>(shdrs[i].sh_size);
+        if (secAddr == 0 || secSize <= 0) continue;
+        quint64 ent = shdrs[i].sh_entsize;
+        if (ent < 8 || ent > 64) ent = 16;
+        const QByteArray bytes = elf->read_array(secOff, secSize);
+        const qint64 blen = bytes.size();
+        for (qint64 e = 0; e + static_cast<qint64>(ent) <= secSize && e + static_cast<qint64>(ent) <= blen; e += static_cast<qint64>(ent)) {
+            for (qint64 j = 0; j + 6 <= static_cast<qint64>(ent); ++j) {
+                if (static_cast<unsigned char>(bytes[static_cast<int>(e + j)]) != 0xFF) continue;
+                if (static_cast<unsigned char>(bytes[static_cast<int>(e + j + 1)]) != 0x25) continue;
+                const qint32 disp = elf->read_int32(secOff + e + j + 2, false);
+                const quint64 ff25 = secAddr + static_cast<quint64>(e + j);
+                const quint64 got = x64 ? (ff25 + 6 + static_cast<quint64>(static_cast<qint64>(disp)))
+                                        : static_cast<quint64>(static_cast<quint32>(disp));
+                auto it = gotToName.constFind(got);
+                if (it == gotToName.constEnd()) break;
+                const quint64 stub = secAddr + static_cast<quint64>(e);
+                if (!emitted.contains(stub)) {
+                    emitted.insert(stub);
+                    addSymbol(syms, it.value(), "import", static_cast<qint64>(stub), -1,
+                              QString(), QString(), QString(), QStringLiteral("PLT"));
+                }
+                break;
+            }
+        }
+    }
+}
+
 }
 
 extern "C" {
@@ -912,6 +988,7 @@ char* die_get_symbols(void* session) {
             }
             if (truncated) break;
         }
+        addElfPltThunks(elf, syms);
     } else if (cls == "MACH" || cls == "MACHOFAT") {
         XMACH* mach = static_cast<XMACH*>(bin);
         XBinary::_MEMORY_MAP mm = bin->getMemoryMap();

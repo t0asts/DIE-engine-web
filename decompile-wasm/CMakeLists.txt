@@ -71,7 +71,7 @@ set(EMCC_LINK_FLAGS
     "-sENVIRONMENT=worker,web"
     "-sFORCE_FILESYSTEM=1"
     "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAP8"
-    "-sEXPORTED_FUNCTIONS=[_decomp_init,_decomp_add_spec_dir,_decomp_create,_decomp_add_region,_decomp_add_symbol,_decomp_add_string,_decomp_add_readonly,_decomp_decompile,_decomp_call_targets,_decomp_free_string,_decomp_destroy,_malloc,_free]"
+    "-sEXPORTED_FUNCTIONS=[_decomp_init,_decomp_add_spec_dir,_decomp_create,_decomp_add_region,_decomp_add_symbol,_decomp_add_import,_decomp_add_string,_decomp_add_readonly,_decomp_decompile,_decomp_call_targets,_decomp_free_string,_decomp_destroy,_malloc,_free]"
 )
 string(JOIN " " EMCC_LINK_FLAGS_STR ${EMCC_LINK_FLAGS})
 set_target_properties(decompile_engine PROPERTIES

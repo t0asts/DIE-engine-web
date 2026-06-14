@@ -24,6 +24,7 @@
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -36,20 +37,69 @@ using ghidra::Funcdata;
 using ghidra::FuncCallSpecs;
 using ghidra::FunctionSymbol;
 using ghidra::LowlevelError;
+using ghidra::PrototypePieces;
 using ghidra::Range;
 using ghidra::Scope;
 using ghidra::SleighArchitecture;
+using ghidra::Symbol;
+using ghidra::TypeCode;
 using ghidra::Varnode;
 using ghidra::int4;
+using ghidra::uint4;
 
 bool g_initialized = false;
 
 struct Handle {
     die_web::WebArchitecture *arch;
     bool libcImported = false;
+    bool importsConverted = false;
+    std::vector<uint64_t> noreturnAddrs;
+    std::vector<std::pair<uint64_t, std::string>> imports;
     explicit Handle(die_web::WebArchitecture *a) : arch(a) {}
     ~Handle() { delete arch; }
 };
+
+bool isNoReturnName(const std::string &n) {
+    static const char *const kNames[] = {
+        "exit", "_exit", "_Exit", "quick_exit", "abort", "_abort",
+        "__stack_chk_fail", "__assert_fail", "__chk_fail", "pthread_exit",
+        "longjmp", "_longjmp", "siglongjmp", "__longjmp_chk",
+        "ExitProcess", "ExitThread", "RtlExitUserProcess", "RtlExitUserThread",
+        "_invoke_watson", "_invalid_parameter_noinfo_noreturn", "terminate",
+    };
+    for (const char *c : kNames) {
+        if (n == c) return true;
+    }
+    return false;
+}
+
+void convertImportsToFuncPtrs(Handle *h) {
+    auto *arch = h->arch;
+    try {
+        AddrSpace *space = arch->getDefaultCodeSpace();
+        Scope *scope = arch->symboltab->getGlobalScope();
+        auto *types = arch->types;
+        const int4 ps = static_cast<int4>(space->getAddrSize());
+        const uint4 ws = space->getWordSize();
+        for (const auto &imp : h->imports) {
+            try {
+                const Address a(space, imp.first);
+                Funcdata *fd = scope->findFunction(a);
+                if (fd == nullptr) continue;
+                if (!fd->getFuncProto().isInputLocked()) continue;
+                PrototypePieces pieces;
+                fd->getFuncProto().getPieces(pieces);
+                TypeCode *tc = types->getTypeCode(pieces);
+                Datatype *fptr = types->getTypePointer(ps, tc, ws);
+                Symbol *sym = fd->getSymbol();
+                scope->removeSymbol(sym);
+                scope->addSymbol(imp.second, fptr, a, Address());
+            } catch (const std::exception &) {
+            }
+        }
+    } catch (const std::exception &) {
+    }
+}
 
 char *dupCString(const std::string &src) {
     char *out = static_cast<char *>(std::malloc(src.size() + 1));
@@ -184,12 +234,32 @@ EMSCRIPTEN_KEEPALIVE
 int decomp_add_symbol(void *handle, uint64_t addr, const char *name) {
     if (!handle || !name || !*name) return -1;
     try {
-        auto *arch = asHandle(handle)->arch;
+        auto *h = asHandle(handle);
+        if (isNoReturnName(name)) h->noreturnAddrs.push_back(addr);
+        auto *arch = h->arch;
         AddrSpace *space = arch->getDefaultCodeSpace();
         Scope *scope = arch->symboltab->getGlobalScope();
         const Address a(space, addr);
         if (scope->findFunction(a) != nullptr) return 0;
         scope->addFunction(a, std::string(name));
+        return 0;
+    } catch (const std::exception &) {
+        return -1;
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int decomp_add_import(void *handle, uint64_t addr, const char *name) {
+    if (!handle || !name || !*name) return -1;
+    try {
+        auto *h = asHandle(handle);
+        auto *arch = h->arch;
+        AddrSpace *space = arch->getDefaultCodeSpace();
+        Scope *scope = arch->symboltab->getGlobalScope();
+        const Address a(space, addr);
+        if (scope->findFunction(a) == nullptr)
+            scope->addFunction(a, std::string(name));
+        h->imports.push_back({addr, std::string(name)});
         return 0;
     } catch (const std::exception &) {
         return -1;
@@ -241,6 +311,10 @@ char *decomp_decompile(void *handle, uint64_t addr, const char *name) {
         importLibcPrototypes(h->arch);
         h->libcImported = true;
     }
+    if (!h->importsConverted) {
+        convertImportsToFuncPtrs(h);
+        h->importsConverted = true;
+    }
 
     auto asComment = [](const std::string &msg) -> char * {
         return dupCString("/* decompile error: " + msg + " */\n");
@@ -251,6 +325,11 @@ char *decomp_decompile(void *handle, uint64_t addr, const char *name) {
         AddrSpace *space = arch->getDefaultCodeSpace();
         const Address a(space, addr);
         Scope *scope = arch->symboltab->getGlobalScope();
+
+        for (uint64_t na : h->noreturnAddrs) {
+            Funcdata *nfd = scope->findFunction(Address(space, na));
+            if (nfd != nullptr) nfd->getFuncProto().setNoReturn(true);
+        }
 
         Funcdata *fd = scope->findFunction(a);
         if (fd == nullptr) {

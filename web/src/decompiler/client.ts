@@ -24,6 +24,7 @@ export interface OpenOptions {
   languageId: string;
   regions: DecompRegion[];
   symbols: [number, string][];
+  imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
   functions: DecompFunction[];
@@ -73,6 +74,7 @@ export class DecompilerClient {
         languageId: opts.languageId,
         regions: opts.regions,
         symbols: opts.symbols,
+        imports: opts.imports,
         readonly: opts.readonly,
         strings: opts.strings,
       },
