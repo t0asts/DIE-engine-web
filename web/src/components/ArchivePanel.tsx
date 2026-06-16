@@ -14,7 +14,8 @@ type SortKey = "name" | "size" | "compressedSize" | "ratio";
 let uniq = 0;
 const newId = () => (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : `f${Date.now()}_${++uniq}`);
 
-const extractable = (e: ArchiveEntry) => !e.isDir && !e.encrypted && (e.method === "store" || e.method === "deflate");
+const EXTRACTABLE_METHODS = new Set(["store", "deflate", "aes", "stream", "mszip"]);
+const extractable = (e: ArchiveEntry) => !e.isDir && EXTRACTABLE_METHODS.has(e.method);
 
 function fmtSize(n: number): string {
   if (n < 1024) return `${n} B`;
@@ -37,11 +38,14 @@ export function ArchivePanel({ archive, bytes, parentName }: Props) {
   const [hideDirs, setHideDirs] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<{ name: string; msg: string } | null>(null);
+  const [password, setPassword] = useState("");
+
+  const hasEncrypted = useMemo(() => archive.entries.some((e) => e.encrypted), [archive.entries]);
 
   const scanEntry = async (e: ArchiveEntry) => {
     setBusy(e.name); setErr(null);
     try {
-      const data = await client.extractArchiveEntry(bytes, e.name);
+      const data = await client.extractArchiveEntry(bytes, e.name, password || undefined);
       const base = parentName.split("/").pop() || parentName;
       const member = e.name.split("/").pop() || e.name;
       await addFile({ id: newId(), name: `${base}!${member}`, size: data.byteLength, bytes: data });
@@ -118,10 +122,28 @@ export function ArchivePanel({ archive, bytes, parentName }: Props) {
           <input type="checkbox" checked={hideDirs} onChange={(e) => setHideDirs(e.target.checked)} />
           hide directories
         </label>
+        {hasEncrypted ? (
+          <input
+            type="text"
+            placeholder="Password (for encrypted entries)…"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            autoComplete="off"
+            spellCheck={false}
+            className="px-2 py-1 text-sm bg-zinc-900 border border-amber-900/60 rounded w-56 font-mono"
+          />
+        ) : null}
         <span className="text-xs text-zinc-500">{rows.length.toLocaleString()} shown</span>
       </div>
 
-      {err ? <div className="text-red-400 text-xs font-mono mb-2">extract "{err.name}": {err.msg}</div> : null}
+      {err ? (
+        <div className="text-red-400 text-xs font-mono mb-2">
+          extract "{err.name}": {err.msg}
+          {/password/i.test(err.msg) && hasEncrypted
+            ? " - enter the password above and try again."
+            : ""}
+        </div>
+      ) : null}
 
       <div className="flex-1 overflow-auto border border-zinc-800 rounded">
         <table className="w-full font-mono text-xs">
@@ -168,7 +190,7 @@ export function ArchivePanel({ archive, bytes, parentName }: Props) {
           <div className="px-3 py-6 text-center text-xs text-zinc-500">No entries match the filter.</div>
         ) : null}
       </div>
-      <div className="mt-1.5 text-[11px] text-zinc-600">"scan" extracts the entry (stored / deflated only) and adds it to the workspace as <span className="font-mono">parent!member</span>.</div>
+      <div className="mt-1.5 text-[11px] text-zinc-600">"scan" extracts the entry (stored / deflated, incl. ZipCrypto &amp; WinZip-AES with a password, and OLE2 / MSI streams) and adds it to the workspace as <span className="font-mono">parent!member</span>.</div>
     </div>
   );
 }

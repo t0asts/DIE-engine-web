@@ -24,6 +24,19 @@ interface Props {
 
 const hex = (n: number) => "0x" + Math.max(0, Math.trunc(n)).toString(16);
 
+async function copyText(text: string): Promise<void> {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand("copy");
+    document.body.removeChild(ta);
+  }
+}
+
 function tokenToAddress(token: string, nameToAddr: Map<string, number>): number | null {
   let m = /^FUN_([0-9a-fA-F]+)$/.exec(token);
   if (m) return parseInt(m[1]!, 16);
@@ -93,6 +106,7 @@ export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) 
   );
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState(state.filter);
+  const [copied, setCopied] = useState(false);
 
   const cache = useRef(state.code);
 
@@ -484,6 +498,20 @@ export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) 
                     ? "ready"
                     : ""}
           </span>
+          <button
+            type="button"
+            onClick={async () => {
+              if (!code) return;
+              await copyText(code);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+            disabled={!code || status === "loading"}
+            title="Copy the full pseudocode (avoids the editor's truncated select-all copy for large functions)"
+            className="ml-auto px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 disabled:text-zinc-600 disabled:hover:bg-zinc-800"
+          >
+            {copied ? "Copied!" : "Copy"}
+          </button>
         </div>
 
         {openErr ? (

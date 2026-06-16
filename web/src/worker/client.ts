@@ -76,12 +76,12 @@ export class ScanClient {
     return this.send<YaraScanResult>({ cmd: "yaraScan", bytes, units });
   }
 
-  async extractArchiveEntry(bytes: ArrayBuffer, entryName: string): Promise<ArrayBuffer> {
+  async extractArchiveEntry(bytes: ArrayBuffer, entryName: string, password?: string): Promise<ArrayBuffer> {
     await this.init({
       signaturesUrl: "/signatures-pack/",
       manifestUrl: "/signatures-pack/manifest.json",
     });
-    return this.send<ArrayBuffer>({ cmd: "extractArchiveEntry", bytes, entryName });
+    return this.send<ArrayBuffer>({ cmd: "extractArchiveEntry", bytes, entryName, password });
   }
 
   dispose(): void {

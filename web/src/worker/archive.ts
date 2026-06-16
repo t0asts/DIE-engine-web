@@ -1,4 +1,5 @@
 import type { ArchiveEntry, ArchiveListing } from "./protocol";
+import { zipCryptoDecrypt, winZipAesDecrypt, type AesStrength } from "./zip-crypto";
 
 const SIG_EOCD   = 0x06054b50;
 const SIG_EOCD64 = 0x06064b50;
@@ -177,8 +178,36 @@ function findCentralDir(bytes: Uint8Array, dv: DataView): { cdOffset: number; cd
   return { cdOffset, cdSize };
 }
 
+function parseAesExtra(extra: Uint8Array): { strength: AesStrength; method: number } | null {
+  const dv = new DataView(extra.buffer, extra.byteOffset, extra.byteLength);
+  let i = 0;
+  while (i + 4 <= extra.length) {
+    const id = dv.getUint16(i, true);
+    const len = dv.getUint16(i + 2, true);
+    if (id === 0x9901 && i + 4 + 7 <= extra.length) {
+      const strength = dv.getUint8(i + 8);
+      const method = dv.getUint16(i + 9, true);
+      if (strength === 1 || strength === 2 || strength === 3) return { strength, method };
+      return null;
+    }
+    i += 4 + len;
+  }
+  return null;
+}
+
+async function inflateRaw(comp: Uint8Array): Promise<{ data: Uint8Array<ArrayBuffer> } | { error: string }> {
+  try {
+    const ds = new DecompressionStream("deflate-raw");
+    const stream = new Blob([comp as Uint8Array<ArrayBuffer>]).stream().pipeThrough(ds);
+    const buf = await new Response(stream).arrayBuffer();
+    return { data: new Uint8Array(buf) };
+  } catch (e) {
+    return { error: `inflate failed: ${(e as Error).message}` };
+  }
+}
+
 export async function extractZipEntry(
-  bytes: Uint8Array, entryName: string,
+  bytes: Uint8Array, entryName: string, password?: string,
 ): Promise<{ data: Uint8Array<ArrayBuffer> } | { error: string }> {
   if (!looksLikeZip(bytes)) return { error: "not a ZIP-family archive" };
   const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
@@ -190,20 +219,22 @@ export async function extractZipEntry(
   while (p + 46 <= cdEnd && dv.getUint32(p, true) === SIG_CDH) {
     const flags    = dv.getUint16(p + 8, true);
     const method   = dv.getUint16(p + 10, true);
+    const dosTime  = dv.getUint16(p + 12, true);
+    const crc32    = dv.getUint32(p + 16, true) >>> 0;
     let   compSize = dv.getUint32(p + 20, true);
     let   uncompSize = dv.getUint32(p + 24, true);
     const nameLen  = dv.getUint16(p + 28, true);
     const extraLen = dv.getUint16(p + 30, true);
     const cmtLen   = dv.getUint16(p + 32, true);
     let   lhOff    = dv.getUint32(p + 42, true);
+    const centralExtra = bytes.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
     const name = decodeName(bytes.subarray(p + 46, p + 46 + nameLen), flags);
 
     if (name === entryName) {
       if (compSize === 0xffffffff || uncompSize === 0xffffffff || lhOff === 0xffffffff) {
-        const ex = bytes.subarray(p + 46 + nameLen, p + 46 + nameLen + extraLen);
-        const exdv = new DataView(ex.buffer, ex.byteOffset, ex.byteLength);
+        const exdv = new DataView(centralExtra.buffer, centralExtra.byteOffset, centralExtra.byteLength);
         let i = 0;
-        while (i + 4 <= ex.length) {
+        while (i + 4 <= centralExtra.length) {
           const id = exdv.getUint16(i, true), len = exdv.getUint16(i + 2, true);
           if (id === 0x0001) {
             let o = i + 4;
@@ -215,24 +246,36 @@ export async function extractZipEntry(
           i += 4 + len;
         }
       }
-      if ((flags & 1) !== 0) return { error: "entry is encrypted" };
-      if (method !== 0 && method !== 8) return { error: `compression method ${method} not supported (only stored / deflated)` };
       if (uncompSize > MAX_EXTRACT_BYTES) return { error: `entry too large to extract (${uncompSize} bytes)` };
       if (lhOff + 30 > bytes.length || dv.getUint32(lhOff, true) !== SIG_LFH) return { error: "bad local file header" };
       const lNameLen  = dv.getUint16(lhOff + 26, true);
       const lExtraLen = dv.getUint16(lhOff + 28, true);
       const dataStart = lhOff + 30 + lNameLen + lExtraLen;
       if (dataStart + compSize > bytes.length) return { error: "truncated archive" };
-      const comp = bytes.subarray(dataStart, dataStart + compSize).slice();
-      if (method === 0) return { data: comp };
-      try {
-        const ds = new DecompressionStream("deflate-raw");
-        const stream = new Blob([comp]).stream().pipeThrough(ds);
-        const buf = await new Response(stream).arrayBuffer();
-        return { data: new Uint8Array(buf) };
-      } catch (e) {
-        return { error: `inflate failed: ${(e as Error).message}` };
+
+      let payload = bytes.subarray(dataStart, dataStart + compSize).slice();
+      let workMethod = method;
+
+      if (method === 99) {
+        const ae = parseAesExtra(centralExtra)
+          ?? parseAesExtra(bytes.subarray(lhOff + 30 + lNameLen, lhOff + 30 + lNameLen + lExtraLen));
+        if (!ae) return { error: "AES entry missing AE extra field" };
+        if (!password) return { error: "password required" };
+        const dec = await winZipAesDecrypt(payload, password, ae.strength);
+        if ("error" in dec) return dec;
+        payload = dec.data;
+        workMethod = ae.method;
+      } else if ((flags & 1) !== 0) {
+        if (!password) return { error: "password required" };
+        const checkByte = (flags & 8) ? (dosTime >>> 8) & 0xff : (crc32 >>> 24) & 0xff;
+        const dec = zipCryptoDecrypt(payload, password, checkByte);
+        if ("error" in dec) return dec;
+        payload = dec.data;
       }
+
+      if (workMethod === 0) return { data: payload };
+      if (workMethod === 8) return inflateRaw(payload);
+      return { error: `compression method ${workMethod} not supported (only stored / deflated)` };
     }
     p += 46 + nameLen + extraLen + cmtLen;
   }

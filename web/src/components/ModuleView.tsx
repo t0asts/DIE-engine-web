@@ -1,6 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 
-import type { ScanResult } from "../worker/protocol";
+import type { DebugInfo, ScanResult } from "../worker/protocol";
 import type { DroppedFile } from "../store/workspace";
 import { archForDecompile } from "../decompiler/arch-map";
 import { symbolAddrBase } from "../decompiler/regions";
@@ -138,6 +138,7 @@ function DetectionTab({ fileName, result }: { fileName: string; result: ScanResu
           <ExportButton fileName={fileName} result={r} />
         </div>
         <RecordsList records={r.records} />
+        <DebugSymbols info={r.debugInfo} />
         {r.errors.length ? (
           <details className="mt-4 text-xs text-zinc-500">
             <summary>Engine warnings ({r.errors.length})</summary>
@@ -151,6 +152,49 @@ function DetectionTab({ fileName, result }: { fileName: string; result: ScanResu
       <FileInfoPanel result={r} />
       <HashPanel hashes={r.hashes} />
       <EntropyGraph points={r.entropy} />
+    </div>
+  );
+}
+
+function DebugSymbols({ info }: { info: DebugInfo[] }) {
+  if (!info.length) return null;
+  return (
+    <div className="mt-4 space-y-3">
+      {info.map((d, i) => <DebugEntry key={i} entry={d} />)}
+    </div>
+  );
+}
+
+const DEBUG_LABELS: Record<DebugInfo["format"], string> = {
+  pdb: "Debug symbols (PDB)",
+  gnu_debuglink: "Debug symbols (.gnu_debuglink)",
+  gnu_debugaltlink: "Debug symbols (.gnu_debugaltlink)",
+  "build-id": "Build ID (.note.gnu.build-id)",
+};
+
+function DebugEntry({ entry }: { entry: DebugInfo }) {
+  const primary = entry.format === "build-id" ? entry.buildId : entry.path;
+  return (
+    <div>
+      <div className="text-zinc-500 text-sm mb-1">
+        {DEBUG_LABELS[entry.format]}
+        {entry.format === "pdb" ? (
+          <span className="ml-2 text-[11px] text-zinc-600">{entry.signature}</span>
+        ) : null}
+      </div>
+      <div className="font-mono text-sm text-emerald-400 break-all select-text">{primary}</div>
+      {entry.format === "pdb" && (entry.guid || entry.age != null) ? (
+        <div className="mt-0.5 font-mono text-[11px] text-zinc-500 break-all">
+          {entry.guid ? <span className="mr-3">GUID {entry.guid}</span> : null}
+          {entry.age != null ? <span>Age {entry.age}</span> : null}
+        </div>
+      ) : null}
+      {entry.format === "gnu_debuglink" ? (
+        <div className="mt-0.5 font-mono text-[11px] text-zinc-500 break-all">CRC32 {entry.crc32}</div>
+      ) : null}
+      {entry.format === "gnu_debugaltlink" ? (
+        <div className="mt-0.5 font-mono text-[11px] text-zinc-500 break-all">Build ID {entry.buildId}</div>
+      ) : null}
     </div>
   );
 }

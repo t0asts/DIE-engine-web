@@ -194,6 +194,33 @@ export interface CertificateInfo {
   certificates?: CertEntry[];
 }
 
+export interface PdbInfo {
+  format: "pdb";
+  path: string;
+  signature: "RSDS" | "NB10";
+  guid?: string;
+  age?: number;
+}
+
+export interface GnuDebugLinkInfo {
+  format: "gnu_debuglink";
+  path: string;
+  crc32: string;
+}
+
+export interface BuildIdInfo {
+  format: "build-id";
+  buildId: string;
+}
+
+export interface GnuDebugAltLinkInfo {
+  format: "gnu_debugaltlink";
+  path: string;
+  buildId: string;
+}
+
+export type DebugInfo = PdbInfo | GnuDebugLinkInfo | BuildIdInfo | GnuDebugAltLinkInfo;
+
 export interface ScanResult {
   fileInfo: FileInfo;
   hashes: Hashes;
@@ -209,6 +236,7 @@ export interface ScanResult {
   extracted: ExtractEntry[];
   mime: string[];
   certificates: CertificateInfo | null;
+  debugInfo: DebugInfo[];
   disasmAvailable: boolean;
   durationMs: number;
 }
@@ -230,6 +258,7 @@ export interface ExtractArchiveEntryRequest {
   cmd: "extractArchiveEntry";
   bytes: ArrayBuffer;
   entryName: string;
+  password?: string;
 }
 
 export interface YaraScanRequest {

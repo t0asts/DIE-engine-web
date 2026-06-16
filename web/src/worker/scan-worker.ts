@@ -24,12 +24,16 @@ import type {
   SymbolEntry,
   ExtractEntry,
   CertificateInfo,
+  DebugInfo,
   ExtractArchiveEntryRequest,
 } from "./protocol";
 
 import { runScan } from "../signature-runtime/runner";
 import { scanStrings } from "./strings";
 import { listZipEntries, looksLikeZip, extractZipEntry } from "./archive";
+import { listOle2, looksLikeOle2, extractOle2Stream } from "./ole2";
+import { listCab, looksLikeCab, extractCabFile } from "./cab";
+import { parseDebugInfo } from "./debug-info";
 
 const ZIP_FAMILY = new Set(["ZIP", "JAR", "APK", "IPA", "NPM"]);
 const ARCHIVE_LIST_MAX_BYTES = 512 * 1024 * 1024;
@@ -373,14 +377,22 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
 
   const certificates = safe(() => getCertificates(sessionPtr)) ?? null;
 
+  const debugInfo: DebugInfo[] = safe(() => parseDebugInfo(bytes)) ?? [];
+
   const disasmAvailable = !!memoryMap && DISASM_SUPPORTED_ARCH_RE.test(memoryMap.arch);
 
   const strings = safe(() => scanStrings(bytes, { minLen: stringsMinLen, maxResults: 50_000 })) ?? [];
 
   let archive: ArchiveListing | null = null;
-  if (looksLikeZip(bytes) && bytes.byteLength <= ARCHIVE_LIST_MAX_BYTES) {
-    archive = safe(() =>
-      listZipEntries(bytes, ZIP_FAMILY.has(sessionReply.jsClass) ? sessionReply.jsClass : "ZIP-family"));
+  if (bytes.byteLength <= ARCHIVE_LIST_MAX_BYTES) {
+    if (looksLikeZip(bytes)) {
+      archive = safe(() =>
+        listZipEntries(bytes, ZIP_FAMILY.has(sessionReply.jsClass) ? sessionReply.jsClass : "ZIP-family"));
+    } else if (looksLikeCab(bytes)) {
+      archive = safe(() => listCab(bytes, "Microsoft Cabinet (CAB)"));
+    } else if (looksLikeOle2(bytes)) {
+      archive = safe(() => listOle2(bytes, "OLE2 Compound File"));
+    }
   }
 
   let sigResult;
@@ -418,13 +430,19 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
     extracted,
     mime,
     certificates,
+    debugInfo,
     disasmAvailable,
     durationMs: Math.round(performance.now() - t0),
   };
 }
 
 async function doExtractArchiveEntry(req: ExtractArchiveEntryRequest): Promise<ArrayBuffer> {
-  const r = await extractZipEntry(new Uint8Array(req.bytes), req.entryName);
+  const bytes = new Uint8Array(req.bytes);
+  const r = looksLikeOle2(bytes)
+    ? extractOle2Stream(bytes, req.entryName)
+    : looksLikeCab(bytes)
+      ? extractCabFile(bytes, req.entryName)
+      : await extractZipEntry(bytes, req.entryName, req.password);
   if ("error" in r) throw new Error(r.error);
 
   return r.data.buffer;
