@@ -27,7 +27,9 @@ export interface OpenOptions {
   imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
+  widestrings: [number, number][];
   functions: DecompFunction[];
+  prototypes: string;
 }
 
 export class DecompilerClient {
@@ -77,6 +79,8 @@ export class DecompilerClient {
         imports: opts.imports,
         readonly: opts.readonly,
         strings: opts.strings,
+        widestrings: opts.widestrings,
+        prototypes: opts.prototypes,
       },
       transfer,
     );

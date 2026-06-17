@@ -22,10 +22,8 @@ if(NOT EXISTS ${DECOMP_DIR}/libdecomp.cc)
 endif()
 
 set(GHIDRA_SOURCES
-    # CORE
     xml.cc marshal.cc space.cc float.cc address.cc pcoderaw.cc translate.cc
     opcodes.cc globalcontext.cc
-    # DECCORE
     capability.cc architecture.cc options.cc graph.cc cover.cc block.cc cast.cc
     typeop.cc database.cc cpool.cc comment.cc stringmanage.cc modelrules.cc
     fspec.cc action.cc loadimage.cc grammar.cc varnode.cc op.cc type.cc
@@ -36,12 +34,10 @@ set(GHIDRA_SOURCES
     double.cc transform.cc constseq.cc bitfield.cc coreaction.cc condexe.cc
     override.cc dynamic.cc crc32.cc prettyprint.cc printlanguage.cc printc.cc
     printjava.cc memstate.cc opbehavior.cc paramid.cc signature.cc
-    # SLEIGH runtime (decode side only)
     sleigh.cc sleigh_arch.cc inject_sleigh.cc pcodeparse.cc pcodecompile.cc
     sleighbase.cc slghsymbol.cc slghpatexpress.cc slghpattern.cc semantics.cc
     context.cc slaformat.cc compression.cc filemanage.cc
     string_ghidra.cc
-    # library entry point
     libdecomp.cc
 )
 list(TRANSFORM GHIDRA_SOURCES PREPEND "${DECOMP_DIR}/")
@@ -71,7 +67,7 @@ set(EMCC_LINK_FLAGS
     "-sENVIRONMENT=worker,web"
     "-sFORCE_FILESYSTEM=1"
     "-sEXPORTED_RUNTIME_METHODS=ccall,cwrap,FS,UTF8ToString,stringToUTF8,lengthBytesUTF8,HEAPU8,HEAP8"
-    "-sEXPORTED_FUNCTIONS=[_decomp_init,_decomp_add_spec_dir,_decomp_create,_decomp_add_region,_decomp_add_symbol,_decomp_add_import,_decomp_add_string,_decomp_add_readonly,_decomp_decompile,_decomp_call_targets,_decomp_free_string,_decomp_destroy,_malloc,_free]"
+    "-sEXPORTED_FUNCTIONS=[_decomp_init,_decomp_add_spec_dir,_decomp_create,_decomp_add_region,_decomp_add_symbol,_decomp_add_import,_decomp_add_string,_decomp_add_readonly,_decomp_parse_c,_decomp_decompile,_decomp_call_targets,_decomp_free_string,_decomp_destroy,_malloc,_free]"
 )
 string(JOIN " " EMCC_LINK_FLAGS_STR ${EMCC_LINK_FLAGS})
 set_target_properties(decompile_engine PROPERTIES

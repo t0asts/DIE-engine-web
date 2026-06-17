@@ -32,7 +32,8 @@ interface DecompApi {
   addSymbol(handle: number, addr: bigint, name: string): number;
   addImport(handle: number, addr: bigint, name: string): number;
   addReadonly(handle: number, addr: bigint, size: bigint): number;
-  addString(handle: number, addr: bigint, len: bigint): number;
+  addString(handle: number, addr: bigint, len: bigint, wide: number): number;
+  parseC(handle: number, text: string): number;
   decompile(handle: number, addr: bigint, name: string): number;
   callTargets(handle: number, addr: bigint): number;
   freeString(ptr: number): void;
@@ -58,7 +59,8 @@ function bindApi(m: EmModule): DecompApi {
     addSymbol: m.cwrap("decomp_add_symbol", "number", ["number", "bigint", "string"]) as DecompApi["addSymbol"],
     addImport: m.cwrap("decomp_add_import", "number", ["number", "bigint", "string"]) as DecompApi["addImport"],
     addReadonly: m.cwrap("decomp_add_readonly", "number", ["number", "bigint", "bigint"]) as DecompApi["addReadonly"],
-    addString: m.cwrap("decomp_add_string", "number", ["number", "bigint", "bigint"]) as DecompApi["addString"],
+    addString: m.cwrap("decomp_add_string", "number", ["number", "bigint", "bigint", "number"]) as DecompApi["addString"],
+    parseC: m.cwrap("decomp_parse_c", "number", ["number", "string"]) as DecompApi["parseC"],
     decompile: m.cwrap("decomp_decompile", "number", ["number", "bigint", "string"]) as DecompApi["decompile"],
     callTargets: m.cwrap("decomp_call_targets", "number", ["number", "bigint"]) as DecompApi["callTargets"],
     freeString: m.cwrap("decomp_free_string", null, ["number"]) as DecompApi["freeString"],
@@ -127,8 +129,10 @@ function doOpen(req: DecompOpenRequest): number {
   }
   for (const [addr, name] of req.symbols) api.addSymbol(handle, BigInt(addr), name);
   for (const [addr, name] of req.imports) api.addImport(handle, BigInt(addr), name);
+  if (req.prototypes) api.parseC(handle, req.prototypes);
   for (const [addr, size] of req.readonly) api.addReadonly(handle, BigInt(addr), BigInt(size));
-  for (const [addr, len] of req.strings) api.addString(handle, BigInt(addr), BigInt(len));
+  for (const [addr, len] of req.strings) api.addString(handle, BigInt(addr), BigInt(len), 0);
+  for (const [addr, len] of req.widestrings) api.addString(handle, BigInt(addr), BigInt(len), 1);
 
   const id = nextSession++;
   sessions.set(id, handle);

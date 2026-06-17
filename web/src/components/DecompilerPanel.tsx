@@ -223,7 +223,9 @@ export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) 
         imports: input.imports,
         readonly: input.readonly,
         strings: input.strings,
+        widestrings: input.widestrings,
         functions: input.functions,
+        prototypes: input.prototypes,
       });
     state.opening = openPromise;
 

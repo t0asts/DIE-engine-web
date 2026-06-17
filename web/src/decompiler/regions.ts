@@ -1,5 +1,6 @@
 import type { ScanResult } from "../worker/protocol";
 import type { DecompRegion, DecompFunction } from "./protocol";
+import { win32Prototypes } from "./prototypes";
 
 export interface DecompInput {
   regions: DecompRegion[];
@@ -7,7 +8,9 @@ export interface DecompInput {
   imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
+  widestrings: [number, number][];
   functions: DecompFunction[];
+  prototypes: string;
   entryPoint: number;
 }
 
@@ -85,21 +88,35 @@ export function buildDecompInput(result: ScanResult, fileBytes: ArrayBuffer): De
   functions.sort((a, b) => a.addr - b.addr);
 
   const strings: [number, number][] = [];
+  const widestrings: [number, number][] = [];
   const readonly: [number, number][] = [];
   const seenStr = new Set<number>();
   const findRange = (off: number, len: number): MappedRange | undefined =>
     mapped.find((m) => off >= m.off && off + len <= m.off + m.size);
   for (const st of result.strings ?? []) {
-    if (st.encoding !== "ascii" || st.length <= 0) continue;
+    const wide = st.encoding === "utf16le";
+    if ((!wide && st.encoding !== "ascii") || st.length <= 0) continue;
     const rec = findRange(st.offset, st.length);
     if (!rec) continue;
     const vaddr = rec.addr + (st.offset - rec.off);
     if (seenStr.has(vaddr)) continue;
     seenStr.add(vaddr);
-    const byteLen = st.length + 1;
-    strings.push([vaddr, byteLen]);
-    if (!WRITABLE_SECTION_RE.test(rec.name)) readonly.push([vaddr, byteLen]);
+    const charSize = wide ? 2 : 1;
+    const elemCount = st.length / charSize + 1;
+    (wide ? widestrings : strings).push([vaddr, elemCount]);
+    if (!WRITABLE_SECTION_RE.test(rec.name)) readonly.push([vaddr, st.length + charSize]);
   }
 
-  return { regions, symbols, imports, readonly, strings, functions, entryPoint };
+  const prototypes = isPE ? win32Prototypes(is64Arch(mm?.arch ?? "", mm?.mode ?? "")) : "";
+
+  return {
+    regions, symbols, imports, readonly, strings, widestrings, functions, prototypes, entryPoint,
+  };
+}
+
+const ARCH64_RE = /^(amd64|x86[-_]?64|aarch64|arm64|ia64|ppc64|riscv64|mips64)/i;
+
+function is64Arch(arch: string, mode: string): boolean {
+  if (mode.includes("64")) return true;
+  return ARCH64_RE.test(arch.trim());
 }

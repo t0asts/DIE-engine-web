@@ -38,6 +38,8 @@ export interface DecompOpenRequest {
   imports: [number, string][];
   readonly: [number, number][];
   strings: [number, number][];
+  widestrings: [number, number][];
+  prototypes: string;
 }
 
 export interface DecompileRequest {

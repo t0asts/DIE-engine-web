@@ -51,10 +51,11 @@ bool g_initialized = false;
 
 struct Handle {
     die_web::WebArchitecture *arch;
-    bool libcImported = false;
+    bool protosImported = false;
     bool importsConverted = false;
     std::vector<uint64_t> noreturnAddrs;
     std::vector<std::pair<uint64_t, std::string>> imports;
+    std::vector<std::string> extraProtos;
     explicit Handle(die_web::WebArchitecture *a) : arch(a) {}
     ~Handle() { delete arch; }
 };
@@ -144,26 +145,37 @@ void ensureInitialized() {
     g_initialized = true;
 }
 
-void importLibcPrototypes(die_web::WebArchitecture *arch) {
-    const std::string buf(die_web::LIBC_PROTOTYPES);
-    std::size_t pos = 0;
-    while (pos < buf.size()) {
-        const std::size_t semi = buf.find(';', pos);
-        if (semi == std::string::npos) break;
-        std::string decl = buf.substr(pos, semi - pos + 1);
-        pos = semi + 1;
-        bool hasContent = false;
-        for (char c : decl) {
-            if (!std::isspace(static_cast<unsigned char>(c))) { hasContent = true; break; }
-        }
-        if (!hasContent) continue;
-        try {
-            std::istringstream is(decl);
-            ghidra::parse_C(arch, is);
-        } catch (const LowlevelError &) {
-        } catch (const std::exception &) {
+void parseCDeclarations(die_web::WebArchitecture *arch, const char *text) {
+    if (!text) return;
+    const std::string buf(text);
+    std::size_t declStart = 0;
+    int depth = 0;
+    for (std::size_t i = 0; i < buf.size(); ++i) {
+        const char c = buf[i];
+        if (c == '{') {
+            depth++;
+        } else if (c == '}') {
+            if (depth > 0) depth--;
+        } else if (c == ';' && depth == 0) {
+            std::string decl = buf.substr(declStart, i - declStart + 1);
+            declStart = i + 1;
+            bool hasContent = false;
+            for (char d : decl) {
+                if (!std::isspace(static_cast<unsigned char>(d))) { hasContent = true; break; }
+            }
+            if (!hasContent) continue;
+            try {
+                std::istringstream is(decl);
+                ghidra::parse_C(arch, is);
+            } catch (const LowlevelError &) {
+            } catch (const std::exception &) {
+            }
         }
     }
+}
+
+void importLibcPrototypes(die_web::WebArchitecture *arch) {
+    parseCDeclarations(arch, die_web::LIBC_PROTOTYPES);
 }
 
 Handle *asHandle(void *p) { return static_cast<Handle *>(p); }
@@ -267,7 +279,7 @@ int decomp_add_import(void *handle, uint64_t addr, const char *name) {
 }
 
 EMSCRIPTEN_KEEPALIVE
-int decomp_add_string(void *handle, uint64_t addr, uint64_t length) {
+int decomp_add_string(void *handle, uint64_t addr, uint64_t length, int wide) {
     if (!handle || length == 0) return -1;
     try {
         auto *arch = asHandle(handle)->arch;
@@ -275,15 +287,26 @@ int decomp_add_string(void *handle, uint64_t addr, uint64_t length) {
         Scope *scope = arch->symboltab->getGlobalScope();
         const Address a(space, addr);
         if (scope->queryContainer(a, 1, Address()) != nullptr) return 0;
-        Datatype *charType = arch->types->getTypeChar(1);
+        Datatype *charType = arch->types->getTypeChar(wide ? 2 : 1);
         const int4 len = static_cast<int4>(length < 4096 ? length : 4096);
         Datatype *arrType = arch->types->getTypeArray(len, charType);
         std::ostringstream nm;
-        nm << "s_" << std::hex << addr;
+        nm << (wide ? "u_" : "s_") << std::hex << addr;
         scope->addSymbol(nm.str(), arrType, a, Address());
         return 0;
     } catch (const std::exception &e) {
         std::cerr << "decomp_add_string: " << e.what() << std::endl;
+        return -1;
+    }
+}
+
+EMSCRIPTEN_KEEPALIVE
+int decomp_parse_c(void *handle, const char *text) {
+    if (!handle || !text || !*text) return -1;
+    try {
+        asHandle(handle)->extraProtos.emplace_back(text);
+        return 0;
+    } catch (const std::exception &) {
         return -1;
     }
 }
@@ -307,9 +330,10 @@ char *decomp_decompile(void *handle, uint64_t addr, const char *name) {
     if (!handle) return nullptr;
     auto *h = asHandle(handle);
 
-    if (!h->libcImported) {
+    if (!h->protosImported) {
+        for (const auto &t : h->extraProtos) parseCDeclarations(h->arch, t.c_str());
         importLibcPrototypes(h->arch);
-        h->libcImported = true;
+        h->protosImported = true;
     }
     if (!h->importsConverted) {
         convertImportsToFuncPtrs(h);
@@ -349,6 +373,26 @@ char *decomp_decompile(void *handle, uint64_t addr, const char *name) {
         action->reset(*fd);
         const int4 res = action->perform(*fd);
         if (res < 0) return asComment("decompilation interrupted");
+
+        bool createdAny = false;
+        const int4 ncalls = fd->numCalls();
+        for (int4 i = 0; i < ncalls; ++i) {
+            FuncCallSpecs *cs = fd->getCallSpecs(i);
+            if (cs == nullptr) continue;
+            const Address &t = cs->getEntryAddress();
+            if (t.isInvalid() || t.getSpace() != space || t.getOffset() == 0) continue;
+            if (scope->findFunction(t) != nullptr) continue;
+            std::ostringstream fn;
+            fn << "FUN_" << std::hex << t.getOffset();
+            scope->addFunction(t, fn.str());
+            createdAny = true;
+        }
+        if (createdAny) {
+            arch->clearAnalysis(fd);
+            action->reset(*fd);
+            const int4 res2 = action->perform(*fd);
+            if (res2 < 0) return asComment("decompilation interrupted");
+        }
 
         std::ostringstream oss;
         arch->print->setOutputStream(&oss);
