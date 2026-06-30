@@ -115,6 +115,7 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
   const overlay = r.memoryMap?.records.find((rec) => rec.name === "Overlay" || rec.filePart === 32) ?? null;
   const hasOverlay = !!overlay && overlay.size > 0;
   const hasCert = !!r.certificates?.present;
+  const hasDotnet = !!r.dotnet?.present;
 
   const tabs: TabDef[] = [
     { id: "detection", label: "Detection", badge: r.records.length || undefined },
@@ -126,6 +127,7 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
     ...(decompArch ? [{ id: "decompile", label: "Decompile" } as TabDef] : []),
     ...(isPE ? [{ id: "peid", label: "PEiD" } as TabDef] : []),
     ...(hasCert ? [{ id: "certificate", label: "Certificate", badge: r.certificates?.certificates?.length || undefined } as TabDef] : []),
+    ...(hasDotnet ? [{ id: "dotnet", label: ".NET" } as TabDef] : []),
     { id: "yara",      label: "YARA" },
     ...(r.archive
       ? [{ id: "archive", label: "Archive", badge: r.archive.totalEntries || undefined } as TabDef]

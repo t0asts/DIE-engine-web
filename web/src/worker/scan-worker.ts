@@ -25,6 +25,7 @@ import type {
   ExtractEntry,
   CertificateInfo,
   DebugInfo,
+  DotNetInfo,
   ExtractArchiveEntryRequest,
 } from "./protocol";
 
@@ -165,6 +166,17 @@ function getFormatStruct(sessionPtr: number): StructNode[] {
   const json = mod.UTF8ToString(resPtr);
   mod.ccall("die_free_string", null, ["number"], [resPtr]);
   return JSON.parse(json) as StructNode[];
+}
+
+function getDotnet(sessionPtr: number): DotNetInfo | null {
+  if (!mod) throw new Error("not initialized");
+  const resPtr = mod.ccall("die_get_dotnet", "number",
+    ["number"], [sessionPtr]) as number;
+  if (!resPtr) return null;
+  const json = mod.UTF8ToString(resPtr);
+  mod.ccall("die_free_string", null, ["number"], [resPtr]);
+  const info = JSON.parse(json) as DotNetInfo;
+  return info.present ? info : null;
 }
 
 const DISASM_MODE_INT: Record<DisasmMode, number> = { auto: 0, arm: 1, thumb: 2, cortexm: 3 };
@@ -368,6 +380,7 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
 
   const memoryMap = safe(() => getMemoryMap(sessionPtr));
   const structure = safe(() => getFormatStruct(sessionPtr)) ?? [];
+  const dotnet = safe(() => getDotnet(sessionPtr)) ?? null;
   const symbols = safe(() => getSymbols(sessionPtr))?.symbols ?? [];
   const mime = safe(() => getMime(bytes)) ?? [];
   const extracted = safe(() => getExtract(sessionPtr)) ?? [];
@@ -431,6 +444,7 @@ async function doScan(req: ScanRequest): Promise<ScanResult> {
     mime,
     certificates,
     debugInfo,
+    dotnet,
     disasmAvailable,
     durationMs: Math.round(performance.now() - t0),
   };

@@ -16,6 +16,7 @@
 #include <QStringList>
 
 #include <cmath>
+#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
@@ -163,6 +164,185 @@ void appendPeStruct(XPE* pe, QJsonArray& top) {
                               QString::number(rh.size()) + QStringLiteral(" block(s), ") + QString::number(total) + QStringLiteral(" entries"), ch));
         }
     }
+}
+
+QString netHex(quint64 v, int bytes) {
+    return QString(QStringLiteral("%1")).arg(v, bytes * 2, 16, QLatin1Char('0'));
+}
+QString relOff(qint64 off) {
+    return QString(QStringLiteral("%1")).arg(off, 4, 16, QLatin1Char('0'));
+}
+QString joinFlagsShort(const QMap<quint64, QString>& m, quint64 v) {
+    QStringList parts;
+    for (auto it = m.constBegin(); it != m.constEnd(); ++it)
+        if (it.key() && (v & it.key()) == it.key()) parts << it.value();
+    return parts.join(QStringLiteral(" | "));
+}
+QString readHeapStr(const QByteArray& heap, quint32 idx) {
+    if (idx == 0 || static_cast<int>(idx) >= heap.size()) return QString();
+    const char* p = heap.constData() + idx;
+    int maxLen = heap.size() - static_cast<int>(idx);
+    int len = 0;
+    while (len < maxLen && p[len] != '\0') ++len;
+    return QString::fromUtf8(p, len);
+}
+QJsonObject netField(const QString& name, qint64 off, const QString& type,
+                     const QString& value, const QString& comment = QString()) {
+    QJsonObject o;
+    o[QStringLiteral("name")]   = name;
+    o[QStringLiteral("offset")] = relOff(off);
+    o[QStringLiteral("type")]   = type;
+    o[QStringLiteral("value")]  = value;
+    if (!comment.isEmpty()) o[QStringLiteral("comment")] = comment;
+    return o;
+}
+
+QJsonObject buildDotnetJson(XPE* pe) {
+    QJsonObject root;
+    if (!pe || !pe->isNETPresent()) { root[QStringLiteral("present")] = false; return root; }
+    root[QStringLiteral("present")] = true;
+
+    XBinary::PDSTRUCT pd = XBinary::createPdStruct();
+    XPE::CLI_INFO ci = pe->getCliInfo(false, &pd);
+
+    {
+        using COR = XPE_DEF::IMAGE_COR20_HEADER;
+        const COR& h = ci.header;
+        QJsonArray rec;
+        rec.append(netField(QStringLiteral("cb"), offsetof(COR, cb), QStringLiteral("DWORD"), netHex(h.cb, 4)));
+        rec.append(netField(QStringLiteral("MajorRuntimeVersion"), offsetof(COR, MajorRuntimeVersion), QStringLiteral("WORD"), netHex(h.MajorRuntimeVersion, 2)));
+        rec.append(netField(QStringLiteral("MinorRuntimeVersion"), offsetof(COR, MinorRuntimeVersion), QStringLiteral("WORD"), netHex(h.MinorRuntimeVersion, 2)));
+        rec.append(netField(QStringLiteral("MetaData_Address"), offsetof(COR, MetaData.VirtualAddress), QStringLiteral("DWORD"), netHex(h.MetaData.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("MetaData_Size"), offsetof(COR, MetaData.Size), QStringLiteral("DWORD"), netHex(h.MetaData.Size, 4)));
+        rec.append(netField(QStringLiteral("Flags"), offsetof(COR, Flags), QStringLiteral("DWORD"), netHex(h.Flags, 4), joinFlagsShort(XPE::getComImageFlagsS(), h.Flags)));
+        rec.append(netField(QStringLiteral("EntryPoint"), offsetof(COR, EntryPointRVA), QStringLiteral("DWORD"), netHex(h.EntryPointToken, 4)));
+        rec.append(netField(QStringLiteral("Resources_Address"), offsetof(COR, Resources.VirtualAddress), QStringLiteral("DWORD"), netHex(h.Resources.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("Resources_Size"), offsetof(COR, Resources.Size), QStringLiteral("DWORD"), netHex(h.Resources.Size, 4)));
+        rec.append(netField(QStringLiteral("StrongNameSignature_Address"), offsetof(COR, StrongNameSignature.VirtualAddress), QStringLiteral("DWORD"), netHex(h.StrongNameSignature.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("StrongNameSignature_Size"), offsetof(COR, StrongNameSignature.Size), QStringLiteral("DWORD"), netHex(h.StrongNameSignature.Size, 4)));
+        rec.append(netField(QStringLiteral("CodeManagerTable_Address"), offsetof(COR, CodeManagerTable.VirtualAddress), QStringLiteral("DWORD"), netHex(h.CodeManagerTable.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("CodeManagerTable_Size"), offsetof(COR, CodeManagerTable.Size), QStringLiteral("DWORD"), netHex(h.CodeManagerTable.Size, 4)));
+        rec.append(netField(QStringLiteral("VTableFixups_Address"), offsetof(COR, VTableFixups.VirtualAddress), QStringLiteral("DWORD"), netHex(h.VTableFixups.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("VTableFixups_Size"), offsetof(COR, VTableFixups.Size), QStringLiteral("DWORD"), netHex(h.VTableFixups.Size, 4)));
+        rec.append(netField(QStringLiteral("ExportAddressTableJumps_Address"), offsetof(COR, ExportAddressTableJumps.VirtualAddress), QStringLiteral("DWORD"), netHex(h.ExportAddressTableJumps.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("ExportAddressTableJumps_Size"), offsetof(COR, ExportAddressTableJumps.Size), QStringLiteral("DWORD"), netHex(h.ExportAddressTableJumps.Size, 4)));
+        rec.append(netField(QStringLiteral("ManagedNativeHeader_Address"), offsetof(COR, ManagedNativeHeader.VirtualAddress), QStringLiteral("DWORD"), netHex(h.ManagedNativeHeader.VirtualAddress, 4)));
+        rec.append(netField(QStringLiteral("ManagedNativeHeader_Size"), offsetof(COR, ManagedNativeHeader.Size), QStringLiteral("DWORD"), netHex(h.ManagedNativeHeader.Size, 4)));
+        QJsonObject hdr;
+        hdr[QStringLiteral("offset")] = sHexU(static_cast<quint64>(ci.nHeaderOffset));
+        hdr[QStringLiteral("records")] = rec;
+        root[QStringLiteral("header")] = hdr;
+    }
+
+    const XPE::CLI_METADATA_HEADER& mh = ci.metaData.header;
+    if (mh.nSignature == 0x424a5342) {
+        QJsonArray rec;
+        qint64 off = 0;
+        auto addMeta = [&](const QString& name, int size, const QString& type,
+                           const QString& value, const QString& comment = QString()) {
+            rec.append(netField(name, off, type, value, comment));
+            off += size;
+        };
+        addMeta(QStringLiteral("Signature"), 4, QStringLiteral("DWORD"), netHex(mh.nSignature, 4), QStringLiteral("BSJB"));
+        addMeta(QStringLiteral("MajorVersion"), 2, QStringLiteral("WORD"), netHex(mh.nMajorVersion, 2));
+        addMeta(QStringLiteral("MinorVersion"), 2, QStringLiteral("WORD"), netHex(mh.nMinorVersion, 2));
+        addMeta(QStringLiteral("Reserved"), 4, QStringLiteral("DWORD"), netHex(mh.nReserved, 4));
+        addMeta(QStringLiteral("VersionStringLength"), 4, QStringLiteral("DWORD"), netHex(mh.nVersionStringLength, 4));
+        addMeta(QStringLiteral("Version"), static_cast<int>(mh.nVersionStringLength), QStringLiteral("TEXT"), mh.sVersion);
+        addMeta(QStringLiteral("Flags"), 2, QStringLiteral("WORD"), netHex(mh.nFlags, 2), joinFlagsShort(XPE::getNetMetadataFlagsS(), mh.nFlags));
+        addMeta(QStringLiteral("Streams"), 2, QStringLiteral("WORD"), netHex(mh.nStreams, 2));
+
+        QJsonArray streams;
+        for (const XPE::CLI_METADATA_STREAM& st : ci.metaData.listStreams) {
+            QJsonObject s;
+            s[QStringLiteral("name")]   = st.sName;
+            s[QStringLiteral("offset")] = sHexU(static_cast<quint64>(st.nOffset));
+            s[QStringLiteral("size")]   = sHexU(static_cast<quint64>(st.nSize));
+            streams.append(s);
+        }
+        QJsonObject md;
+        md[QStringLiteral("offset")]  = sHexU(static_cast<quint64>(ci.nMetaDataOffset));
+        md[QStringLiteral("records")] = rec;
+        md[QStringLiteral("streams")] = streams;
+        root[QStringLiteral("metadata")] = md;
+    }
+
+    if (ci.bValid && ci.metaData.Tables_TablesNumberOfIndexes[XPE_DEF::metadata_Assembly] > 0) {
+        XPE_DEF::S_METADATA_ASSEMBLY a = pe->getMetadataAssembly(&ci, 0);
+        const QString culture = readHeapStr(ci.metaData.baStrings, a.nCulture);
+        QJsonObject asmObj;
+        asmObj[QStringLiteral("name")]    = pe->getMetadataAssemblyName(&ci, 0);
+        asmObj[QStringLiteral("version")] = QString(QStringLiteral("%1.%2.%3.%4"))
+            .arg(a.nMajorVersion).arg(a.nMinorVersion).arg(a.nBuildNumber).arg(a.nRevisionNumber);
+        asmObj[QStringLiteral("flags")]        = QStringLiteral("0x") + netHex(a.nFlags, 4);
+        asmObj[QStringLiteral("hashAlgId")]    = QStringLiteral("0x") + netHex(a.nHashAlgId, 4);
+        asmObj[QStringLiteral("culture")]      = culture.isEmpty() ? QStringLiteral("neutral") : culture;
+        asmObj[QStringLiteral("hasPublicKey")] = a.nPublicKeyOrToken != 0;
+        root[QStringLiteral("assembly")] = asmObj;
+    }
+
+    if (ci.bValid && ci.metaData.Tables_TablesNumberOfIndexes[XPE_DEF::metadata_Module] > 0) {
+        const QString modName = pe->getMetadataModuleName(&ci, 0);
+        if (!modName.isEmpty()) {
+            QJsonObject mo;
+            mo[QStringLiteral("name")] = modName;
+            root[QStringLiteral("module")] = mo;
+        }
+    }
+
+    {
+        QJsonObject ep;
+        const quint32 token = ci.header.EntryPointToken;
+        if (token == 0) {
+            ep[QStringLiteral("kind")] = QStringLiteral("none");
+        } else if (ci.header.Flags & XPE_DEF::COMIMAGE_FLAGS_NATIVE_ENTRYPOINT) {
+            ep[QStringLiteral("kind")]  = QStringLiteral("native");
+            ep[QStringLiteral("token")] = sHexU(token);
+        } else {
+            const quint32 table = token >> 24;
+            const quint32 cRow  = token & 0xffffff;
+            ep[QStringLiteral("kind")]  = QStringLiteral("managed");
+            ep[QStringLiteral("token")] = QStringLiteral("0x") + netHex(token, 4);
+            ep[QStringLiteral("table")] = XPE::mdtIdToString(table);
+            ep[QStringLiteral("row")]   = static_cast<int>(cRow);
+            if (table == XPE_DEF::metadata_MethodDef && cRow >= 1 && ci.bValid) {
+                XPE_DEF::S_METADATA_METHODDEF mdRec = pe->getMetadataMethodDef(&ci, cRow - 1);
+                const QString mName = readHeapStr(ci.metaData.baStrings, mdRec.nName);
+                if (!mName.isEmpty()) ep[QStringLiteral("method")] = mName;
+            }
+        }
+        root[QStringLiteral("entryPoint")] = ep;
+    }
+
+    if (ci.bValid) {
+        QJsonArray tables;
+        const QList<XPE::CLI_METADATA_RECORD> recs = pe->getCliMetadataRecords(&ci, &pd);
+        for (const XPE::CLI_METADATA_RECORD& t : recs) {
+            QJsonObject o;
+            o[QStringLiteral("name")]   = t.sId;
+            o[QStringLiteral("id")]     = static_cast<int>(t.nNumber);
+            o[QStringLiteral("count")]  = static_cast<double>(t.nCount);
+            o[QStringLiteral("sorted")] = t.bIsSorted;
+            o[QStringLiteral("offset")] = sHexU(static_cast<quint64>(t.nTableOffset));
+            tables.append(o);
+        }
+        root[QStringLiteral("tables")] = tables;
+    }
+
+    if (ci.bValid) {
+        QJsonArray us;
+        const QList<QString> strs = pe->getUnicodeStrings(&ci, &pd);
+        int n = 0;
+        for (const QString& s : strs) {
+            if (s.isEmpty()) continue;
+            if (n++ >= 2000) break;
+            us.append(s);
+        }
+        root[QStringLiteral("userStrings")]      = us;
+        root[QStringLiteral("userStringsTotal")] = static_cast<double>(strs.size());
+    }
+
+    return root;
 }
 
 void appendElfStruct(XELF* elf, QJsonArray& top) {
@@ -640,6 +820,15 @@ char* die_get_format_struct(void* session) {
     else if (cls == "MACH")       appendMachStruct(static_cast<XMACH*>(s->binary()), top);
 
     return dupCString(QJsonDocument(top).toJson(QJsonDocument::Compact));
+}
+
+EMSCRIPTEN_KEEPALIVE
+char* die_get_dotnet(void* session) {
+    auto* s = asSession(session);
+    if (!s || !s->binary()) return nullptr;
+    if (s->jsClass() != "PE") return nullptr;
+    QJsonObject root = buildDotnetJson(static_cast<XPE*>(s->binary()));
+    return dupCString(QJsonDocument(root).toJson(QJsonDocument::Compact));
 }
 
 EMSCRIPTEN_KEEPALIVE

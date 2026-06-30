@@ -21,6 +21,7 @@ import { VisualizationPanel } from "./VisualizationPanel";
 import { HexView } from "./HexView";
 import { OverlayPanel } from "./OverlayPanel";
 import { CertificatePanel } from "./CertificatePanel";
+import { DotNetPanel } from "./DotNetPanel";
 import { DataConverterPanel } from "./DataConverterPanel";
 import { DemanglerPanel } from "./DemanglerPanel";
 import { ExportButton } from "./ExportButton";
@@ -105,6 +106,8 @@ export function ModuleView({
       return <PeidPanel bytes={file.bytes} memoryMap={r.memoryMap} />;
     case "certificate":
       return r.certificates ? <CertificatePanel info={r.certificates} bytes={file.bytes} /> : null;
+    case "dotnet":
+      return r.dotnet ? <DotNetPanel info={r.dotnet} /> : null;
     case "yara":
       return <YaraPanel bytes={file.bytes} />;
     case "archive":

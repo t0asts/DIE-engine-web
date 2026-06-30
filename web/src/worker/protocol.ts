@@ -221,6 +221,57 @@ export interface GnuDebugAltLinkInfo {
 
 export type DebugInfo = PdbInfo | GnuDebugLinkInfo | BuildIdInfo | GnuDebugAltLinkInfo;
 
+export interface DotNetRecord {
+  name: string;
+  offset: string;
+  type: string;
+  value: string;
+  comment?: string;
+}
+
+export interface DotNetStream {
+  name: string;
+  offset: string;
+  size: string;
+}
+
+export interface DotNetTable {
+  name: string;
+  id: number;
+  count: number;
+  sorted: boolean;
+  offset: string;
+}
+
+export interface DotNetAssembly {
+  name: string;
+  version: string;
+  flags: string;
+  hashAlgId: string;
+  culture: string;
+  hasPublicKey: boolean;
+}
+
+export interface DotNetEntryPoint {
+  kind: "managed" | "native" | "none";
+  token?: string;
+  table?: string;
+  row?: number;
+  method?: string;
+}
+
+export interface DotNetInfo {
+  present: boolean;
+  header?: { offset: string; records: DotNetRecord[] };
+  metadata?: { offset: string; records: DotNetRecord[]; streams: DotNetStream[] };
+  assembly?: DotNetAssembly;
+  module?: { name: string };
+  entryPoint?: DotNetEntryPoint;
+  tables?: DotNetTable[];
+  userStrings?: string[];
+  userStringsTotal?: number;
+}
+
 export interface ScanResult {
   fileInfo: FileInfo;
   hashes: Hashes;
@@ -237,6 +288,7 @@ export interface ScanResult {
   mime: string[];
   certificates: CertificateInfo | null;
   debugInfo: DebugInfo[];
+  dotnet: DotNetInfo | null;
   disasmAvailable: boolean;
   durationMs: number;
 }

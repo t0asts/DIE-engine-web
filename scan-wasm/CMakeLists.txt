@@ -204,6 +204,7 @@ set(EXPORTED_FUNCTIONS_LIST
     "_die_compute_entropy"
     "_die_get_memory_map"
     "_die_get_format_struct"
+    "_die_get_dotnet"
     "_die_get_symbols"
     "_die_disasm_range"
     "_die_yara_scan"
