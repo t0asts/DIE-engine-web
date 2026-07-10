@@ -132,7 +132,7 @@ export function ScanResultPanel({ fileId }: { fileId: string }) {
     ...(r.archive
       ? [{ id: "archive", label: "Archive", badge: r.archive.totalEntries || undefined } as TabDef]
       : []),
-    ...(extractedCount ? [{ id: "extractor", label: "Extractor", badge: extractedCount } as TabDef] : []),
+    { id: "extractor", label: "Extractor", badge: extractedCount || undefined },
     { id: "strings",   label: "Strings",   badge: stringCount || undefined },
     { id: "hex",       label: "Hex" },
     { id: "visualize", label: "Visualize" },

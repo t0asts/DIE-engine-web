@@ -7,6 +7,8 @@ import type {
   DisasmMode,
   YaraScanResult,
   YaraRuleUnit,
+  ExtractorMode,
+  ExtractResult,
 } from "./protocol";
 
 interface Pending {
@@ -82,6 +84,19 @@ export class ScanClient {
       manifestUrl: "/signatures-pack/manifest.json",
     });
     return this.send<ArrayBuffer>({ cmd: "extractArchiveEntry", bytes, entryName, password });
+  }
+
+  async extract(
+    bytes: ArrayBuffer,
+    mode: ExtractorMode,
+    deepScan: boolean,
+    allTypes: boolean,
+  ): Promise<ExtractResult> {
+    await this.init({
+      signaturesUrl: "/signatures-pack/",
+      manifestUrl: "/signatures-pack/manifest.json",
+    });
+    return this.send<ExtractResult>({ cmd: "extract", bytes, mode, deepScan, allTypes }, [bytes]);
   }
 
   dispose(): void {

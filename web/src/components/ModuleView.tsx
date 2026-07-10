@@ -115,11 +115,11 @@ export function ModuleView({
         <ArchivePanel archive={r.archive} bytes={file.bytes} parentName={file.name} />
       ) : null;
     case "extractor":
-      return <ExtractorPanel records={r.extracted ?? []} bytes={file.bytes} parentName={file.name} />;
+      return <ExtractorPanel key={file.id} records={r.extracted ?? []} bytes={file.bytes} parentName={file.name} />;
     case "strings":
       return <StringsPanel strings={r.strings} />;
     case "hex":
-      return <HexView bytes={hexBytes} target={hexTarget} />;
+      return <HexView fileId={file.id} fileName={file.name} bytes={hexBytes} target={hexTarget} />;
     case "visualize":
       return <VisualizationPanel bytes={file.bytes} memoryMap={r.memoryMap} />;
     case "convert":

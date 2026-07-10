@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { ScanClient } from "../worker/client";
 import type { ScanResult } from "../worker/protocol";
 import { evictDecompState, evictAllDecompState } from "../decompiler/cache";
+import { evictHexEditState, evictAllHexEditState } from "./hex-edits";
 import { useSettings, scanOptionsFromSettings } from "./settings";
 import { recordRecentFile } from "./recent";
 import {
@@ -137,6 +138,7 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     closeFile(id) {
       evictDecompState(id);
+      evictHexEditState(id);
       set((s) => {
         const idx = s.files.findIndex((f) => f.id === id);
         if (idx === -1) return s;
@@ -155,11 +157,13 @@ export const useWorkspace = create<WorkspaceState>((set, get) => {
 
     closeAll() {
       evictAllDecompState();
+      evictAllHexEditState();
       set({ files: [], activeId: null, scans: new Map(), layouts: new Map() });
     },
 
     clear() {
       evictAllDecompState();
+      evictAllHexEditState();
       get().client.dispose();
       set({ files: [], activeId: null, scans: new Map(), layouts: new Map() });
     },

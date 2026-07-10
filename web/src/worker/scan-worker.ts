@@ -27,6 +27,8 @@ import type {
   DebugInfo,
   DotNetInfo,
   ExtractArchiveEntryRequest,
+  ExtractRequest,
+  ExtractResult,
 } from "./protocol";
 
 import { runScan } from "../signature-runtime/runner";
@@ -462,6 +464,26 @@ async function doExtractArchiveEntry(req: ExtractArchiveEntryRequest): Promise<A
   return r.data.buffer;
 }
 
+function doExtract(req: ExtractRequest): ExtractResult {
+  if (!mod) throw new Error("not initialized");
+  const bytes = new Uint8Array(req.bytes);
+  const bp = mod._malloc(bytes.byteLength || 1);
+  if (bytes.byteLength) mod.HEAPU8.set(bytes, bp);
+  const op = writeCString(mod, JSON.stringify({
+    mode: req.mode, deepScan: req.deepScan, allTypes: req.allTypes,
+  }));
+  const resPtr = mod.ccall("die_extract_ex", "number",
+    ["number", "number", "number"], [bp, bytes.byteLength, op]) as number;
+  mod._free(bp);
+  mod._free(op);
+  const records = resPtr ? (() => {
+    const json = mod!.UTF8ToString(resPtr);
+    mod!.ccall("die_free_string", null, ["number"], [resPtr]);
+    return JSON.parse(json) as ExtractEntry[];
+  })() : [];
+  return { records, mode: req.mode };
+}
+
 function doYaraScan(req: YaraScanRequest): YaraScanResult {
   if (!mod) throw new Error("not initialized");
   const bytes = new Uint8Array(req.bytes);
@@ -542,6 +564,9 @@ self.addEventListener("message", async (ev: MessageEvent<WorkerRequest>) => {
         reply({ id: req.id, ok: true, result: buf }, [buf]);
         break;
       }
+      case "extract":
+        reply({ id: req.id, ok: true, result: doExtract(req) });
+        break;
     }
   } catch (err) {
     reply({

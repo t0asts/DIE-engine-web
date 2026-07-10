@@ -210,6 +210,7 @@ set(EXPORTED_FUNCTIONS_LIST
     "_die_yara_scan"
     "_die_get_mime"
     "_die_extract"
+    "_die_extract_ex"
     "_die_demangle"
     "_die_get_import_hash"
     "_die_get_certificates"

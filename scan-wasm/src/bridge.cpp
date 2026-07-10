@@ -1447,6 +1447,34 @@ char* die_get_mime(const uint8_t* bytes, size_t size) {
 
 #include "xextractor.h"
 
+namespace {
+
+QByteArray extractRecordsToJson(const QVector<XExtractor::RECORD>& recs) {
+    QJsonArray out;
+    for (const auto& r : recs) {
+        QJsonObject o;
+        o["offset"] = static_cast<double>(r.nOffset);
+        o["size"]   = static_cast<double>(r.nSize);
+        o["type"]   = XBinary::fileTypeIdToString(r.fileType);
+        if (!r.sName.isEmpty())   o["name"]   = r.sName;
+        if (!r.sExt.isEmpty())    o["ext"]    = r.sExt;
+        if (!r.sString.isEmpty()) o["string"] = r.sString;
+        if (r.handleMethod != XBinary::HANDLE_METHOD_UNKNOWN)
+            o["method"] = XBinary::handleMethodToString(r.handleMethod);
+        if (r.nCRC) o["crc"] = QString("%1").arg(r.nCRC, 8, 16, QChar('0'));
+        out.append(o);
+    }
+    return QJsonDocument(out).toJson(QJsonDocument::Compact);
+}
+
+XExtractor::EMODE parseExtractorMode(const QString& s) {
+    if (s == "raw")    return XExtractor::EMODE_RAW;
+    if (s == "format") return XExtractor::EMODE_FORMAT;
+    return XExtractor::EMODE_HEURISTIC;
+}
+
+}
+
 extern "C" {
 
 EMSCRIPTEN_KEEPALIVE
@@ -1463,19 +1491,43 @@ char* die_extract(void* session) {
 
     XBinary::PDSTRUCT pd = XBinary::createPdStruct();
     const QVector<XExtractor::RECORD> recs = XExtractor::scanDevice(dev, opts, &pd);
+    return dupCString(extractRecordsToJson(recs));
+}
 
-    QJsonArray out;
-    for (const auto& r : recs) {
-        QJsonObject o;
-        o["offset"] = static_cast<double>(r.nOffset);
-        o["size"]   = static_cast<double>(r.nSize);
-        o["type"]   = XBinary::fileTypeIdToString(r.fileType);
-        if (!r.sName.isEmpty())   o["name"]   = r.sName;
-        if (!r.sExt.isEmpty())    o["ext"]    = r.sExt;
-        if (!r.sString.isEmpty()) o["string"] = r.sString;
-        out.append(o);
+EMSCRIPTEN_KEEPALIVE
+char* die_extract_ex(const uint8_t* bytes, size_t size, const char* optionsJson) {
+    if (!bytes || size == 0) return nullptr;
+    QByteArray buf(reinterpret_cast<const char*>(bytes), static_cast<qsizetype>(size));
+    QBuffer dev(&buf);
+    if (!dev.open(QIODevice::ReadOnly)) return nullptr;
+
+    QString mode = "heuristic";
+    bool deepScan = true;
+    bool allTypes = false;
+    if (optionsJson && *optionsJson) {
+        QJsonParseError pe{};
+        const QJsonDocument d = QJsonDocument::fromJson(QByteArray(optionsJson), &pe);
+        if (pe.error == QJsonParseError::NoError && d.isObject()) {
+            const QJsonObject j = d.object();
+            if (j.contains("mode"))     mode     = j.value("mode").toString(mode);
+            if (j.contains("deepScan")) deepScan = j.value("deepScan").toBool(deepScan);
+            if (j.contains("allTypes")) allTypes = j.value("allTypes").toBool(allTypes);
+        }
     }
-    return dupCString(QJsonDocument(out).toJson(QJsonDocument::Compact));
+
+    XExtractor::OPTIONS opts = XExtractor::getDefaultOptions();
+    opts.fileType  = XBinary::FT_UNKNOWN;
+    opts.emode     = parseExtractorMode(mode);
+    opts.bAllTypes = allTypes;
+    opts.bDeepScan = deepScan;
+    opts.bAnalyze  = true;
+    opts.bExtract  = false;
+    opts.nLimit    = 50000;
+
+    XBinary::PDSTRUCT pd = XBinary::createPdStruct();
+    const QVector<XExtractor::RECORD> recs = XExtractor::scanDevice(&dev, opts, &pd);
+    dev.close();
+    return dupCString(extractRecordsToJson(recs));
 }
 
 }

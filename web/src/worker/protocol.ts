@@ -97,6 +97,15 @@ export interface ExtractEntry {
   name?: string;
   ext?: string;
   string?: string;
+  method?: string;
+  crc?: string;
+}
+
+export type ExtractorMode = "heuristic" | "format" | "raw";
+
+export interface ExtractResult {
+  records: ExtractEntry[];
+  mode: ExtractorMode;
 }
 
 export interface StructNode {
@@ -303,7 +312,8 @@ export type WorkerRequest =
   | DemangleRequest
   | DisasmRequest
   | YaraScanRequest
-  | ExtractArchiveEntryRequest;
+  | ExtractArchiveEntryRequest
+  | ExtractRequest;
 
 export interface ExtractArchiveEntryRequest {
   id: number;
@@ -311,6 +321,15 @@ export interface ExtractArchiveEntryRequest {
   bytes: ArrayBuffer;
   entryName: string;
   password?: string;
+}
+
+export interface ExtractRequest {
+  id: number;
+  cmd: "extract";
+  bytes: ArrayBuffer;
+  mode: ExtractorMode;
+  deepScan: boolean;
+  allTypes: boolean;
 }
 
 export interface YaraScanRequest {
