@@ -50,7 +50,7 @@ export function DemanglerPanel() {
             type="button"
             disabled={!input.trim() || status === "running"}
             onClick={() => run(input.trim())}
-            className="px-3 py-1.5 text-sm rounded bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-800 disabled:text-zinc-500"
+            className="px-3 py-1.5 text-sm rounded bg-amber-600 hover:bg-amber-500 text-zinc-950 font-medium disabled:bg-zinc-800 disabled:text-zinc-500"
           >
             {status === "running" ? "Demangling…" : "Demangle"}
           </button>

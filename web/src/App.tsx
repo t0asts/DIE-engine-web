@@ -6,6 +6,7 @@ import { DropZone } from "./components/DropZone";
 import { FileList } from "./components/FileList";
 import { ScanResultPanel } from "./components/ScanResultPanel";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { useDropUpload } from "./components/useDropUpload";
 
 function fmtBytes(n: number): string {
@@ -96,6 +97,8 @@ export function App() {
           >
             ⚙
           </button>
+          <span className="w-px h-5 bg-zinc-800 mx-1" aria-hidden="true" />
+          <ThemeToggle />
         </div>
       </header>
 

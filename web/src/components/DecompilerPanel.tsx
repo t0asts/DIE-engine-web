@@ -8,6 +8,7 @@ import { buildDecompInput } from "../decompiler/regions";
 import { getDecompilerClient, type DecompilerSession } from "../decompiler/client";
 import { getDecompState, markSessionUsed, type DecompFileState } from "../decompiler/cache";
 import { setupMonaco } from "../decompiler/monaco-setup";
+import { useTheme } from "../store/theme";
 
 setupMonaco();
 
@@ -59,6 +60,7 @@ function harvestFunAddrs(code: string): number[] {
 }
 
 export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) {
+  const theme = useTheme((s) => s.theme);
   const input = useMemo(() => buildDecompInput(result, bytes), [result, bytes]);
 
   const stateRef = useRef<DecompFileState | null>(null);
@@ -530,7 +532,7 @@ export function DecompilerPanel({ fileId, result, bytes, arch, target }: Props) 
           <Editor
             height="100%"
             language="cpp"
-            theme="vs-dark"
+            theme={theme === "light" ? "vs" : "vs-dark"}
             value={code}
             onMount={handleMount}
             options={{

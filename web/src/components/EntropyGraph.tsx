@@ -1,9 +1,16 @@
 import { useEffect, useRef } from "react";
 
 import type { EntropyPoint } from "../worker/protocol";
+import { useTheme } from "../store/theme";
+
+function themeColor(name: string, fallback: string): string {
+  const v = getComputedStyle(document.documentElement).getPropertyValue(`--c-${name}`).trim();
+  return v ? `rgb(${v})` : fallback;
+}
 
 export function EntropyGraph({ points }: { points: EntropyPoint[] }) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const theme = useTheme((s) => s.theme);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -17,14 +24,14 @@ export function EntropyGraph({ points }: { points: EntropyPoint[] }) {
     canvas.width = W;
     canvas.height = H;
 
-    ctx.fillStyle = "#0b0b0e";
+    ctx.fillStyle = themeColor("zinc-950", "#0b0b0e");
     ctx.fillRect(0, 0, W, H);
 
     if (points.length === 0) return;
 
     const yScale = (v: number) => H - (v / 8) * H;
 
-    ctx.strokeStyle = "#fbbf24";
+    ctx.strokeStyle = themeColor("amber-400", "#fbbf24");
     ctx.lineWidth = 1.5 * dpr;
     ctx.beginPath();
     points.forEach((p, i) => {
@@ -35,7 +42,7 @@ export function EntropyGraph({ points }: { points: EntropyPoint[] }) {
     });
     ctx.stroke();
 
-    ctx.strokeStyle = "#27272a";
+    ctx.strokeStyle = themeColor("zinc-800", "#27272a");
     ctx.lineWidth = 1 * dpr;
     for (const v of [4, 7]) {
       const y = yScale(v);
@@ -44,7 +51,7 @@ export function EntropyGraph({ points }: { points: EntropyPoint[] }) {
       ctx.lineTo(W, y);
       ctx.stroke();
     }
-  }, [points]);
+  }, [points, theme]);
 
   return (
     <section className="p-4 border-t border-zinc-800">

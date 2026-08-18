@@ -133,7 +133,7 @@ export function DisasmView({ bytes, entryPoint, arch, onDecompile }: Props) {
                 onClick={() => setMode(o.id)}
                 className={
                   "px-2 py-1 text-xs rounded " +
-                  (mode === o.id ? "bg-sky-700 text-white" : "bg-zinc-800 hover:bg-zinc-700")
+                  (mode === o.id ? "bg-sky-600 text-white" : "bg-zinc-800 hover:bg-zinc-700")
                 }
                 title={o.id === "auto" ? "Guess ARM vs Thumb from the binary" : `Force ${o.label}`}
               >

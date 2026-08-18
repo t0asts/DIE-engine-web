@@ -130,7 +130,7 @@ export function ArchivePanel({ archive, bytes, parentName }: Props) {
             onChange={(e) => setPassword(e.target.value)}
             autoComplete="off"
             spellCheck={false}
-            className="px-2 py-1 text-sm bg-zinc-900 border border-amber-900/60 rounded w-56 font-mono"
+            className="px-2 py-1 text-sm bg-zinc-900 border border-amber-700/60 dark:border-amber-900/60 rounded w-56 font-mono"
           />
         ) : null}
         <span className="text-xs text-zinc-500">{rows.length.toLocaleString()} shown</span>
